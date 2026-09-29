@@ -33,3 +33,7 @@ __pycache__/
 
 # Codebuff session metadata
 .freebuff/
+
+# Kotlin/Native & build session dirs
+.kotlin/
+backend/node_modules/
