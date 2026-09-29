@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dosely — Your private GLP-1 companion</title>
+<meta name="description" content="Dosely tracks your GLP-1 injections, pen stock and weight — with an on-device AI coach. Private, offline, no account. Coming soon to Google Play." />
+<meta property="og:title" content="Dosely — Your private GLP-1 companion" />
+<meta property="og:description" content="Injections, pen stock, weight and an offline AI coach. All on your phone. Coming soon to Google Play." />
+<meta property="og:image" content="assets/feature.jpg" />
+<meta property="og:type" content="website" />
+<link rel="icon" type="image/png" href="assets/icon.png" />
+<style>
+  :root {
+    --forest: #0E3B2E;
+    --forest-deep: #0A2C22;
+    --mint: #7BE495;
+    --mint-strong: #3ECF74;
+    --sage: #BFE8CE;
+    --cream: #F7F5EF;
+    --ink: #14231D;
+    --muted: #5A6E64;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+
+  /* ---------- nav ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 22px;
+    padding: 14px 6vw;
+    background: rgba(247, 245, 239, 0.88);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(14, 59, 46, 0.08);
+  }
+  nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.15rem; color: var(--forest); text-decoration: none; }
+  nav .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  nav a.link { color: var(--muted); text-decoration: none; font-size: 0.95rem; }
+  nav a.link:hover { color: var(--forest); }
+  nav .spacer { flex: 1; }
+  .btn-coffee {
+    background: #FFDD00; color: #1a1a1a; font-weight: 700; text-decoration: none;
+    padding: 9px 18px; border-radius: 999px; font-size: 0.92rem; white-space: nowrap;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .btn-coffee:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255, 196, 107, .5); }
+
+  /* ---------- hero ---------- */
+  header {
+    position: relative; overflow: hidden; text-align: center;
+    padding: 90px 6vw 70px;
+    background: linear-gradient(160deg, var(--forest) 0%, var(--forest-deep) 70%);
+    color: var(--cream);
+  }
+  header::before, header::after {
+    content: ""; position: absolute; border-radius: 50%; filter: blur(90px); opacity: .35;
+  }
+  header::before { width: 480px; height: 480px; background: var(--mint-strong); top: -180px; right: -120px; }
+  header::after { width: 420px; height: 420px; background: #8EC9FF; bottom: -220px; left: -140px; opacity: .18; }
+  .hero-inner { position: relative; max-width: 880px; margin: 0 auto; }
+  .hero-icon { width: 108px; height: 108px; border-radius: 26px; box-shadow: 0 18px 50px rgba(0,0,0,.45); }
+  header h1 { font-size: clamp(2.6rem, 6vw, 4.2rem); margin: 26px 0 6px; letter-spacing: -.02em; }
+  header .tagline { font-size: clamp(1.1rem, 2.4vw, 1.45rem); color: var(--mint); font-weight: 500; }
+  header .sub { margin: 18px auto 0; max-width: 640px; color: #cfe3d8; font-size: 1.04rem; }
+  .badges { margin-top: 26px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(123,228,149,.12); border: 1px solid rgba(123,228,149,.35);
+    color: var(--mint); border-radius: 999px; padding: 7px 16px; font-size: .88rem; font-weight: 600;
+  }
+  .badge.soon { background: var(--mint-strong); color: #06281B; border-color: transparent; }
+  .badge .pulse {
+    width: 9px; height: 9px; border-radius: 50%; background: currentColor;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: .45; transform: scale(.8);} }
+
+  .cta-row { margin-top: 34px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; text-decoration: none;
+    padding: 14px 30px; border-radius: 999px; font-weight: 700; font-size: 1.02rem;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn-primary { background: var(--mint-strong); color: #06281B; box-shadow: 0 10px 30px rgba(62,207,116,.35); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 38px rgba(62,207,116,.5); }
+  .btn-ghost { border: 1.5px solid rgba(247,245,239,.4); color: var(--cream); }
+  .btn-ghost:hover { background: rgba(247,245,239,.1); }
+
+  /* ---------- sections ---------- */
+  section { padding: 84px 6vw; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  .kicker {
+    display: inline-block; color: var(--mint-strong); font-weight: 700;
+    text-transform: uppercase; letter-spacing: .14em; font-size: .8rem; margin-bottom: 10px;
+  }
+  h2 { font-size: clamp(1.8rem, 3.6vw, 2.5rem); color: var(--forest); letter-spacing: -.01em; margin-bottom: 14px; }
+  .lede { color: var(--muted); max-width: 660px; font-size: 1.06rem; }
+
+  /* features */
+  .grid { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
+  .card {
+    background: #fff; border: 1px solid rgba(14,59,46,.08); border-radius: 18px;
+    padding: 26px 24px; transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(14,59,46,.12); }
+  .card .emoji { font-size: 1.9rem; }
+  .card h3 { margin: 12px 0 6px; font-size: 1.08rem; color: var(--forest); }
+  .card p { color: var(--muted); font-size: .95rem; }
+
+  /* screenshots */
+  .shots { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+  .shot { border-radius: 20px; overflow: hidden; box-shadow: 0 14px 36px rgba(14,59,46,.16); transition: transform .18s ease; }
+  .shot:hover { transform: translateY(-6px) scale(1.02); }
+  .shot img { width: 100%; display: block; }
+  .shot figcaption { padding: 10px 14px; background: #fff; font-size: .85rem; color: var(--muted); }
+
+  /* video */
+  .video-wrap {
+    margin: 44px auto 0; max-width: 420px; border-radius: 26px; overflow: hidden;
+    box-shadow: 0 24px 70px rgba(14,59,46,.3); background: #000;
+  }
+  .video-wrap video { width: 100%; display: block; }
+
+  /* privacy band */
+  .band {
+    background: linear-gradient(160deg, var(--forest) 0%, var(--forest-deep) 80%);
+    color: var(--cream); border-radius: 26px; padding: 54px 48px; position: relative; overflow: hidden;
+  }
+  .band::after {
+    content: ""; position: absolute; width: 340px; height: 340px; border-radius: 50%;
+    background: var(--mint-strong); filter: blur(110px); opacity: .3; bottom: -160px; right: -100px;
+  }
+  .band h2 { color: var(--cream); }
+  .band .lede { color: #cfe3d8; }
+  .checks { margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; position: relative; z-index: 1; }
+  .check { display: flex; gap: 12px; align-items: flex-start; font-size: .98rem; color: #e7f2ec; }
+  .check .tick { color: var(--mint); font-weight: 800; }
+
+  /* languages */
+  .langs { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .lang {
+    background: #fff; border: 1px solid rgba(14,59,46,.1); color: var(--forest);
+    padding: 5px 13px; border-radius: 999px; font-size: .84rem;
+  }
+
+  /* roadmap */
+  .timeline { margin-top: 36px; border-left: 2px solid rgba(62,207,116,.4); padding-left: 26px; display: grid; gap: 22px; }
+  .tl-item { position: relative; }
+  .tl-item::before {
+    content: ""; position: absolute; left: -34px; top: 6px; width: 12px; height: 12px;
+    border-radius: 50%; background: var(--sage); border: 2.5px solid var(--mint-strong);
+  }
+  .tl-item.done::before { background: var(--mint-strong); }
+  .tl-item.now::before { background: var(--mint-strong); box-shadow: 0 0 0 6px rgba(62,207,116,.2); }
+  .tl-item h4 { color: var(--forest); font-size: 1.02rem; }
+  .tl-item p { color: var(--muted); font-size: .92rem; }
+  .now-label { background: var(--mint-strong); color: #06281B; font-size: .72rem; font-weight: 800; border-radius: 999px; padding: 2px 10px; margin-left: 8px; vertical-align: middle; }
+
+  /* notify cta */
+  .notify { text-align: center; padding: 76px 6vw; background: #fff; }
+  .notify h2 { margin-bottom: 8px; }
+  .notify p { color: var(--muted); }
+  .notify .cta-row { margin-top: 26px; }
+  .btn-dark { background: var(--forest); color: var(--cream); }
+  .btn-dark:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(14,59,46,.35); }
+
+  footer {
+    padding: 40px 6vw 54px; text-align: center; color: var(--muted); font-size: .9rem;
+    border-top: 1px solid rgba(14,59,46,.08);
+  }
+  footer .links { margin: 12px 0; display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  footer a { color: var(--forest); }
+
+  @media (max-width: 640px) {
+    nav a.link { display: none; }
+    section { padding: 60px 6vw; }
+    .band { padding: 40px 26px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="brand" href="#"><img src="assets/icon.png" alt="Dosely" /> Dosely</a>
+  <a class="link" href="#features">Features</a>
+  <a class="link" href="#screens">Screens</a>
+  <a class="link" href="#privacy">Privacy</a>
+  <a class="link" href="#roadmap">Roadmap</a>
+  <span class="spacer"></span>
+  <a class="btn-coffee" href="https://buymeacoffee.com/charleshartmann" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+</nav>
+
+<header>
+  <div class="hero-inner">
+    <img class="hero-icon" src="assets/icon.png" alt="Dosely app icon" />
+    <h1>Dosely</h1>
+    <div class="tagline">Your private companion for the GLP-1 journey</div>
+    <p class="sub">Injections, pen stock, weight and an on‑device AI coach — all on your
+    phone. No account. No cloud. No nonsense.</p>
+    <div class="badges">
+      <span class="badge soon"><span class="pulse"></span> Coming soon to Google Play</span>
+      <span class="badge">Android 8+</span>
+      <span class="badge">59 languages</span>
+      <span class="badge">100% on-device</span>
+    </div>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/chartmann1590/dosely" target="_blank" rel="noopener">★ Watch on GitHub</a>
+      <a class="btn btn-ghost" href="#video">▶ Watch the preview</a>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <span class="kicker">Features</span>
+    <h2>Everything that matters. Nothing that doesn't.</h2>
+    <p class="lede">Dosely was built for real GLP-1 routines — from titration schedules to
+    running low on pens the week before your next dose.</p>
+    <div class="grid">
+      <div class="card"><div class="emoji">💉</div><h3>Injection tracking</h3>
+        <p>Log doses in seconds — medication, mg, site and notes. Titration-aware schedule suggestions for semaglutide, tirzepatide, dulaglutide, liraglutide and CagriSema.</p></div>
+      <div class="card"><div class="emoji">🖊️</div><h3>Pen stock &amp; re-up alerts</h3>
+        <p>A pen is deducted per injection. Low-stock and out-of-stock warnings arrive before you run dry, with refill reminders timed to your interval.</p></div>
+      <div class="card"><div class="emoji">⚖️</div><h3>Weight journey</h3>
+        <p>Start weight, goal, total change and a 7-day average — in kilograms or pounds, switchable anytime.</p></div>
+      <div class="card"><div class="emoji">📅</div><h3>Calendar &amp; insights</h3>
+        <p>A month view of doses, skips and weigh-ins with streaks, adherence and a projected goal date based on your own trend.</p></div>
+      <div class="card"><div class="emoji">🤖</div><h3>On-device AI coach</h3>
+        <p>Google's Gemma 4 runs fully offline on your phone. Ask about nausea, nutrition, titration and habits — nothing is ever uploaded. Clearly labeled as AI, with one-tap reporting.</p></div>
+      <div class="card"><div class="emoji">🌍</div><h3>59 languages, on device</h3>
+        <p>The whole app translates itself using Google ML Kit — no server round-trips, works offline, remembers your choice.</p></div>
+      <div class="card"><div class="emoji">🔔</div><h3>Gentle reminders</h3>
+        <p>Dose reminders, refill nudges and a weekly weigh-in prompt — delivered locally, never through someone's server.</p></div>
+      <div class="card"><div class="emoji">📱</div><h3>Home-screen widget</h3>
+        <p>Your next dose, pen stock and latest weight at a glance, refreshed automatically.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="video" style="background:#fff;">
+  <div class="wrap" style="text-align:center;">
+    <span class="kicker">Preview</span>
+    <h2>45 seconds of calm tracking</h2>
+    <p class="lede" style="margin:0 auto;">Sound on — narrated tour of Dosely.</p>
+    <div class="video-wrap">
+      <video controls preload="none" poster="assets/video_poster.jpg">
+        <source src="assets/dosely_promo.mp4" type="video/mp4" />
+        Your browser doesn't support embedded video.
+      </video>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap">
+    <span class="kicker">Screens</span>
+    <h2>Designed to feel calm</h2>
+    <p class="lede">Light and dark themes, smooth animated transitions, and no clutter.</p>
+    <div class="shots">
+      <figure class="shot"><img loading="lazy" src="assets/01_home.jpg" alt="Dosely home screen" /><figcaption>Home — next dose, stock, streak</figcaption></figure>
+      <figure class="shot"><img loading="lazy" src="assets/02_doses.jpg" alt="Injection log" /><figcaption>Injection log with sites &amp; notes</figcaption></figure>
+      <figure class="shot"><img loading="lazy" src="assets/03_calendar.jpg" alt="Calendar and insights" /><figcaption>Calendar &amp; journey insights</figcaption></figure>
+      <figure class="shot"><img loading="lazy" src="assets/04_weight.jpg" alt="Weight journey" /><figcaption>Weight journey in kg or lb</figcaption></figure>
+      <figure class="shot"><img loading="lazy" src="assets/05_coach.jpg" alt="AI coach chat" /><figcaption>On-device AI coach</figcaption></figure>
+      <figure class="shot"><img loading="lazy" src="assets/06_settings.jpg" alt="Settings" /><figcaption>Stock alerts, languages, theme</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="privacy">
+  <div class="wrap">
+    <div class="band">
+      <span class="kicker" style="color:var(--mint);">Privacy</span>
+      <h2>Your health data never leaves your phone</h2>
+      <p class="lede">Dosely has no account, no cloud sync and no analytics. The AI coach
+      runs on your device. Read the full
+      <a href="https://github.com/chartmann1590/dosely/blob/main/PRIVACY_POLICY.md" style="color:var(--mint);">Privacy Policy</a>
+      and <a href="https://github.com/chartmann1590/dosely/blob/main/TERMS_OF_SERVICE.md" style="color:var(--mint);">Terms of Service</a>.</p>
+      <div class="checks">
+        <div class="check"><span class="tick">✓</span><span>Injections, weights and chats stay in local storage on your device</span></div>
+        <div class="check"><span class="tick">✓</span><span>AI runs offline — prompts never leave the phone</span></div>
+        <div class="check"><span class="tick">✓</span><span>No analytics SDK, no crash reporters, no accounts</span></div>
+        <div class="check"><span class="tick">✓</span><span>Translate packs run on device too — 59 languages</span></div>
+        <div class="check"><span class="tick">✓</span><span>Optional ads governed by Google's consent flow, with in-app privacy controls</span></div>
+        <div class="check"><span class="tick">✓</span><span>Erase everything with one tap — clear data or uninstall</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:30px;">
+  <div class="wrap">
+    <span class="kicker">Languages</span>
+    <h2>Speaks your language</h2>
+    <p class="lede">The entire interface translates on device — including the AI prompt suggestions.</p>
+    <div class="langs">
+      <span class="lang">English</span><span class="lang">Español</span><span class="lang">Français</span>
+      <span class="lang">Deutsch</span><span class="lang">Português</span><span class="lang">Italiano</span>
+      <span class="lang">Nederlands</span><span class="lang">Polski</span><span class="lang">Türkçe</span>
+      <span class="lang">Русский</span><span class="lang">Українська</span><span class="lang">日本語</span>
+      <span class="lang">한국어</span><span class="lang">中文（简体）</span><span class="lang">Bahasa Indonesia</span>
+      <span class="lang">हिन्दी</span><span class="lang">العربية</span><span class="lang">+ 42 more</span>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap" style="background:#fff;">
+  <div class="wrap">
+    <span class="kicker">Roadmap</span>
+    <h2>Where Dosely is heading</h2>
+    <div class="timeline">
+      <div class="tl-item done"><h4>✅ Core tracking</h4><p>Injections, pen stock, weight, calendar insights, widget, reminders.</p></div>
+      <div class="tl-item done"><h4>✅ On-device AI coach</h4><p>Gemma 4 offline, streaming answers, medical disclaimers, in-app reporting.</p></div>
+      <div class="tl-item done"><h4>✅ 59-language on-device translation</h4><p>ML Kit powered, persisted, works fully offline.</p></div>
+      <div class="tl-item done"><h4>✅ Google Play compliance</h4><p>Consent flow, legal docs, AI-content reporting, store listing assets.</p></div>
+      <div class="tl-item now"><h4>🚀 Google Play release<span class="now-label">in progress</span></h4><p>Final store review. Watch this repo or the website for the launch announcement.</p></div>
+      <div class="tl-item"><h4>🧭 Next up</h4><p>Export &amp; backup/restore, iOS evaluation, Wear OS complication.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="notify">
+  <div class="wrap">
+    <img src="assets/icon.png" alt="" style="width:64px;border-radius:16px;" />
+    <h2>Coming soon to Google Play</h2>
+    <p>Free to download. Star or watch the repo and you'll be the first to know.</p>
+    <div class="cta-row">
+      <a class="btn btn-dark" href="https://github.com/chartmann1590/dosely" target="_blank" rel="noopener">★ Star on GitHub</a>
+      <a class="btn btn-coffee" style="font-size:1.02rem;" href="https://buymeacoffee.com/charleshartmann" target="_blank" rel="noopener">☕ Support on Buy me a coffee</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="links">
+    <a href="https://github.com/chartmann1590/dosely">GitHub</a>
+    <a href="https://buymeacoffee.com/charleshartmann">Buy me a coffee</a>
+    <a href="https://github.com/chartmann1590/dosely/blob/main/PRIVACY_POLICY.md">Privacy Policy</a>
+    <a href="https://github.com/chartmann1590/dosely/blob/main/TERMS_OF_SERVICE.md">Terms of Service</a>
+    <a href="https://github.com/chartmann1590/dosely/blob/main/SECURITY.md">Security</a>
+  </div>
+  <div>Dosely is a tracking tool, <strong>not a medical device</strong>. It does not provide medical advice, diagnosis or treatment. Always consult a qualified healthcare professional about your medication and health.</div>
+  <div style="margin-top:8px;">© 2026 Charles Hartmann · Built with 💚</div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.Dosely" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <style name="Theme.Dosely.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0E3B2E</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="windowSplashScreenAnimationDuration">400</item>
+        <item name="postSplashScreenTheme">@style/Theme.Dosely</item>
+    </style>
+</resources>

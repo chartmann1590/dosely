@@ -1,0 +1,35 @@
+# Android / Gradle
+*.apk
+*.aab
+*.apk.idsig
+.gradle/
+build/
+app/build/
+/local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Local secret signing
+*.jks
+*.keystore
+keystore.properties
+
+# Dev-session artifacts (not part of the shipped project)
+/ui_dump.xml
+/dosely_copy.db
+/dosely_copy.db-wal
+/dosely_copy.db-shm
+/screenshots/
+/tmp/
+
+# Video build intermediates (final promo video IS committed)
+store_assets/video/frames/scene*.mp4
+store_assets/video/frames/video_only.mp4
+store_assets/video/frames/narration.m4a
+store_assets/video/frames/concat.txt
+store_assets/video/frames/sbs.png
+__pycache__/
+
+# Codebuff session metadata
+.freebuff/

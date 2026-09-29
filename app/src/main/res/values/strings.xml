@@ -1,0 +1,256 @@
+<resources>
+    <string name="app_name">Dosely</string>
+    <string name="widget_label">Dosely — Next Dose</string>
+    <string name="widget_desc">Your next GLP-1 dose, pen stock and latest weight at a glance.</string>
+
+    <!-- ============ Onboarding ============ -->
+    <string name="onb_welcome_title">Welcome to Dosely</string>
+    <string name="onb_welcome_sub">A private companion for your GLP-1 journey. Track injections, weight and pen stock — all on your device.</string>
+    <string name="onb_welcome_cta">Get started</string>
+    <string name="onb_privacy_title">Private by design</string>
+    <string name="onb_privacy_sub">Your doses, weight and chats never leave your phone. No account, no cloud sync.</string>
+    <string name="onb_med_title">Which medication are you taking?</string>
+    <string name="onb_med_sub">We will tailor your dose schedule and pen tracking.</string>
+    <string name="onb_dose_title">Your injection schedule</string>
+    <string name="onb_dose_sub">We will remind you every %1$d days. You can adjust this anytime.</string>
+    <string name="onb_dose_every">Every</string>
+    <string name="onb_dose_days">days</string>
+    <string name="onb_dose_time">Preferred reminder time</string>
+    <string name="onb_dose_first">Date of your first (or next) injection</string>
+    <string name="onb_stock_title">How many pens do you have on hand?</string>
+    <string name="onb_stock_sub">We will warn you before you run out and remind you to re-up in time.</string>
+    <string name="onb_weight_units">Units</string>
+    <string name="onb_weight_title">What is your starting weight?</string>
+    <string name="onb_weight_sub">Used only on this device to chart your progress. You can change it later.</string>
+    <string name="onb_weight_kg">Weight</string>
+    <string name="onb_weight_goal">Goal weight (optional)</string>
+    <string name="onb_lang_title">Choose your language</string>
+    <string name="onb_lang_sub">The whole app can be translated on device. Pick from available language packs — you can change it anytime in Settings.</string>
+    <string name="onb_lang_download">Download language pack (%1$s)</string>
+    <string name="onb_lang_downloading">Downloading pack…</string>
+    <string name="onb_lang_ready">Language pack ready</string>
+    <string name="onb_ai_title">Meet your on-device AI coach</string>
+    <string name="onb_ai_sub">Dosely can run Google\'s Gemma model fully offline so you can ask questions about your journey. Nothing is sent to any server.</string>
+    <string name="onb_ai_uses">Uses about %1$s of storage</string>
+    <string name="onb_ai_download">Download AI model (%1$s)</string>
+    <string name="onb_ai_downloading">Downloading model… %1$s</string>
+    <string name="onb_ai_skip">Skip for now</string>
+    <string name="onb_ai_ready">AI coach ready</string>
+    <string name="onb_rem_title">Stay on track with reminders</string>
+    <string name="onb_rem_sub">Allow notifications so Dosely can remind you about injections, low pen stock and weekly weigh-ins.</string>
+    <string name="onb_rem_allow">Allow notifications</string>
+    <string name="onb_rem_later">Maybe later</string>
+    <string name="onb_done_title">You are all set</string>
+    <string name="onb_done_sub">Your first reminder is scheduled. Welcome aboard!</string>
+    <string name="onb_done_cta">Open Dosely</string>
+    <string name="onb_next">Next</string>
+    <string name="onb_back">Back</string>
+
+    <!-- ============ Bottom nav ============ -->
+    <string name="nav_home">Home</string>
+    <string name="nav_doses">Doses</string>
+    <string name="nav_weight">Weight</string>
+    <string name="nav_coach">Coach</string>
+    <string name="nav_settings">Settings</string>
+    <string name="nav_calendar">Calendar</string>
+
+    <!-- ============ Calendar & insights ============ -->
+    <string name="cal_title">Calendar &amp; insights</string>
+    <string name="cal_prev_month">Previous month</string>
+    <string name="cal_next_month">Next month</string>
+    <string name="cal_injections_month">%1$d injections</string>
+    <string name="cal_skipped_month">%1$d skipped</string>
+    <string name="cal_weighins_month">%1$d weigh-ins</string>
+    <string name="cal_month_change">This month</string>
+    <string name="cal_legend">Taken · Skipped · Weigh-in</string>
+    <string name="cal_day_injection">Injection · %1$s</string>
+    <string name="cal_day_skipped">Dose skipped</string>
+    <string name="cal_day_weight">Weigh-in · %1$s</string>
+    <string name="cal_day_none">Nothing logged this day</string>
+    <string name="ins_title">Journey insights</string>
+    <string name="ins_total_doses">Total injections</string>
+    <string name="ins_skipped">Skipped doses</string>
+    <string name="ins_days_on">Days on treatment</string>
+    <string name="ins_longest_streak">Longest streak</string>
+    <string name="ins_avg_weekly">Avg weekly change</string>
+    <string name="ins_projected">Projected goal date</string>
+    <string name="ins_projected_eta">~%1$s</string>
+    <string name="ins_no_projection">Log more weigh-ins to see a projection</string>
+
+    <!-- ============ Home ============ -->
+    <string name="home_greeting_morning">Good morning</string>
+    <string name="home_greeting_afternoon">Good afternoon</string>
+    <string name="home_greeting_evening">Good evening</string>
+    <string name="home_next_dose">Next injection</string>
+    <string name="home_today">Today</string>
+    <string name="home_tomorrow">Tomorrow</string>
+    <string name="home_in_days">in %1$d days</string>
+    <string name="home_overdue">Overdue</string>
+    <string name="home_taken_today">Dose taken today ✓</string>
+    <string name="home_take_now">Log dose now</string>
+    <string name="home_stock_title">Pen stock</string>
+    <string name="home_stock_pens">%1$d pens</string>
+    <string name="home_stock_low">Running low — re-up soon</string>
+    <string name="home_stock_out">Out of pens — re-up needed</string>
+    <string name="home_stock_ok">Stock looks good</string>
+    <string name="home_stock_refill">Stock lasts until ~%1$s</string>
+    <string name="home_weight_title">Weight</string>
+    <string name="home_weight_current">Current</string>
+    <string name="home_weight_start">Start</string>
+    <string name="home_weight_goal">Goal</string>
+    <string name="home_weight_lost">lost</string>
+    <string name="home_weight_gained">gained</string>
+    <string name="home_no_weight">No weight logged yet</string>
+    <string name="home_log_weight">Log weight</string>
+    <string name="home_streak">Injection streak</string>
+    <string name="home_streak_days">%1$d in a row</string>
+    <string name="home_adherence">Adherence</string>
+    <string name="home_coach_hint">Ask your AI coach anything about your journey</string>
+    <string name="home_disclaimer_short">Dosely is a tracking tool, not medical advice.</string>
+
+    <!-- ============ Doses ============ -->
+    <string name="doses_title">Injection log</string>
+    <string name="doses_empty">No injections logged yet.\nYour first one will appear here.</string>
+    <string name="doses_log_new">Log an injection</string>
+    <string name="doses_site">Injection site</string>
+    <string name="doses_site_abdomen">Abdomen</string>
+    <string name="doses_site_thigh">Thigh</string>
+    <string name="doses_site_arm">Upper arm</string>
+    <string name="doses_site_other">Other</string>
+    <string name="doses_notes">Notes (optional)</string>
+    <string name="doses_mg">mg</string>
+    <string name="doses_save">Save</string>
+    <string name="doses_cancel">Cancel</string>
+    <string name="doses_delete">Delete</string>
+    <string name="doses_scheduled">Scheduled</string>
+    <string name="doses_taken">Taken</string>
+    <string name="doses_missed_title">Missed?</string>
+    <string name="doses_missed_body">Mark the scheduled dose as skipped so your schedule stays accurate.</string>
+    <string name="doses_skip">Skip dose</string>
+    <string name="doses_stock_deducted">1 pen deducted from stock</string>
+
+    <!-- ============ Weight ============ -->
+    <string name="weight_title">Weight journey</string>
+    <string name="weight_log_new">Log weight</string>
+    <string name="weight_kg">kg</string>
+    <string name="weight_trend">Trend</string>
+    <string name="weight_total_change">Total change</string>
+    <string name="weight_since_start">since start</string>
+    <string name="weight_to_goal">%1$s to goal</string>
+    <string name="weight_goal_reached">Goal reached! 🎉</string>
+    <string name="weight_empty">Log your weight to see your journey chart.</string>
+    <string name="weight_history">History</string>
+    <string name="weight_week_avg">7-day average</string>
+
+    <!-- ============ Coach ============ -->
+    <string name="coach_title">AI Coach</string>
+    <string name="coach_disclaimer_title">Heads up — this is AI, not a doctor</string>
+    <string name="coach_disclaimer_body">Answers come from an AI language model running on your phone. It can make mistakes and is not medical advice. Always confirm with your healthcare provider before changing medication, doses or diet.</string>
+    <string name="coach_disclaimer_ack">I understand</string>
+    <string name="coach_input_hint">Ask about doses, side effects, habits…</string>
+    <string name="coach_send">Send</string>
+    <string name="coach_thinking">Thinking…</string>
+    <string name="coach_not_ready">The AI model is not downloaded yet. Get it in Settings → AI model.</string>
+    <string name="coach_download">Download model</string>
+    <string name="coach_suggestion_1">Tips for handling nausea</string>
+    <string name="coach_suggestion_2">Foods that keep me full longer</string>
+    <string name="coach_suggestion_3">Explain titration schedules</string>
+    <string name="coach_suggestion_4">What if I miss a dose?</string>
+    <string name="coach_clear">Clear chat</string>
+    <string name="coach_context_on">Coach knows your stats</string>
+    <string name="coach_error">The model hit an error. Try again.</string>
+
+    <!-- ============ Settings ============ -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_language">App language</string>
+    <string name="settings_language_sub">Translates the entire app on device. Downloads a pack per language (~30 MB).</string>
+    <string name="settings_lang_system">System default</string>
+    <string name="settings_lang_search">Search languages…</string>
+    <string name="settings_lang_downloading">Downloading…</string>
+    <string name="settings_lang_delete_pack">Remove pack</string>
+    <string name="settings_lang_change_warning">Translating… the app will switch over in a moment.</string>
+    <string name="settings_medication">Medication</string>
+    <string name="settings_med_change">Change medication</string>
+    <string name="settings_schedule">Injection schedule</string>
+    <string name="settings_interval">Interval</string>
+    <string name="settings_rem_time">Reminder time</string>
+    <string name="settings_stock">Pen stock</string>
+    <string name="settings_stock_pens">Pens on hand</string>
+    <string name="settings_stock_threshold">Low-stock warning at</string>
+    <string name="settings_reminders">Reminders</string>
+    <string name="settings_reminders_enable">Injection reminders</string>
+    <string name="settings_refill_enable">Re-up (refill) reminders</string>
+    <string name="settings_weekly_enable">Weekly weigh-in reminder</string>
+    <string name="settings_notifications_blocked">Notifications are turned off for Dosely. Enable them in system settings to get reminders.</string>
+    <string name="settings_open_system_settings">Open settings</string>
+    <string name="settings_ai_model">AI model</string>
+    <string name="settings_ai_sub">Gemma 4 on-device chat model. Works offline, stays on your phone.</string>
+    <string name="settings_ai_download">Download (%1$s)</string>
+    <string name="settings_ai_delete">Delete model</string>
+    <string name="settings_ai_ready">Model ready · %1$s</string>
+    <string name="settings_ai_size_on_device">On device: %1$s</string>
+    <string name="settings_goal">Goal weight</string>
+    <string name="settings_start_weight">Start weight</string>
+    <string name="settings_units">Units</string>
+    <string name="settings_units_sub">Used for weight everywhere in the app.</string>
+    <string name="settings_units_metric">Metric (kg)</string>
+    <string name="settings_units_imperial">Imperial (lb)</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_add_widget">Add home-screen widget</string>
+    <string name="settings_add_widget_sub">Next dose, pen stock and weight at a glance.</string>
+    <string name="settings_about">About</string>
+    <string name="settings_disclaimer">Medical disclaimer</string>
+    <string name="settings_disclaimer_body">Dosely is a personal tracking utility. It does not provide medical advice, diagnoses or treatment recommendations. The AI coach is an offline language model — not a clinician. Always consult a qualified healthcare professional about your medication and health.</string>
+    <string name="settings_privacy">Privacy: all data stays on this device.</string>
+    <string name="settings_done">Done</string>
+
+    <!-- ============ Reminders / notifications ============ -->
+    <string name="notif_channel_doses">Injection reminders</string>
+    <string name="notif_channel_doses_desc">Reminds you when it is time for your next GLP-1 injection.</string>
+    <string name="notif_channel_stock">Stock alerts</string>
+    <string name="notif_channel_stock_desc">Warns you when your pen stock is low so you can re-up in time.</string>
+    <string name="notif_channel_weekly">Weekly weigh-in</string>
+    <string name="notif_channel_weekly_desc">A gentle weekly nudge to log your weight.</string>
+    <string name="notif_dose_title">Injection time</string>
+    <string name="notif_dose_body">Time for your %1$s dose. Tap to log it.</string>
+    <string name="notif_refill_title">Pens running low</string>
+    <string name="notif_refill_body">Only %1$d pens left. Time to re-up your prescription.</string>
+    <string name="notif_out_title">Out of pens</string>
+    <string name="notif_out_body">Your pen stock is empty. Re-up before your next dose on %1$s.</string>
+    <string name="notif_weekly_title">Weekly weigh-in</string>
+    <string name="notif_weekly_body">Take a moment to log this week\'s weight and keep your journey on track.</string>
+
+    <!-- ============ Common ============ -->
+    <string name="common_ok">OK</string>
+    <string name="common_error">Something went wrong</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_save">Save</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_yes">Yes</string>
+    <string name="common_no">No</string>
+
+    <!-- ============ Ads & consent ============ -->
+    <string name="ads_label">Ad</string>
+    <string name="settings_privacy_options">Privacy options</string>
+    <string name="settings_privacy_options_sub">Manage how ads are personalized to you.</string>
+    <string name="settings_tos">Terms of Service</string>
+    <string name="settings_privacy_policy">Privacy Policy</string>
+
+    <!-- ============ AI reporting ============ -->
+    <string name="report_title">Report this answer</string>
+    <string name="report_body">Flag inappropriate or inaccurate AI-generated content. Reporting removes the message from your chat and helps us improve the coach. This does not send your health data anywhere.</string>
+    <string name="report_flag">Report &amp; remove</string>
+    <string name="report_email">Email support</string>
+    <string name="report_done">Reported. The message was removed from your chat.</string>
+    <string name="report_flagged_tag">Reported</string>
+
+    <!-- ============ Legal ============ -->
+    <string name="legal_tos_title">Terms of Service</string>
+    <string name="legal_privacy_title">Privacy Policy</string>
+    <string name="legal_last_updated">Last updated: September 28, 2026</string>
+    <string name="legal_back">Back</string>
+</resources>

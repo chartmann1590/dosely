@@ -1,0 +1,5 @@
+contact_links:
+  - name: Question or support
+    url: https://buymeacoffee.com/charleshartmann
+    about: Reach the maintainer or support the project
+blank_issues_enabled: false
