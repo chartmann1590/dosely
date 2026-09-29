@@ -1,0 +1,40 @@
+// wrangler configuration for the Hartmann Studios cross-promotion Worker.
+//
+// NOTE: account_id and KV namespace ids are resource *identifiers*, not secrets
+// (they appear in every request URL). The only secret here is ADMIN_TOKEN which
+// is intentionally NOT in this file — set it with:
+//     npx wrangler secret put ADMIN_TOKEN
+// For local dev, create an untracked `.dev.vars` file:
+//     ADMIN_TOKEN=dev-local-token
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "crosspromo",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "account_id": "b9812477cf1517b4d2a626417564b48a",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    // Catalog refresh every 6 hours (requirement: 6–12h cadence)
+    "crons": ["0 */6 * * *"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CATALOG_KV",
+      "id": "f6fc6568aa3f446184a25f296b7f8940",
+      "title": "hartmann-crosspromo"
+    },
+    {
+      "binding": "ANALYTICS_KV",
+      "id": "3ce86097d0404e3bb5137ac2edd3f695",
+      "title": "hartmann-crosspromo-analytics"
+    }
+  ],
+  "vars": {
+    "DEVELOPER_ID": "Hartmann Studios",
+    "DEVELOPER_PAGE_URL": "https://play.google.com/store/apps/developer?id=Hartmann+Studios",
+    "ENVIRONMENT": "production"
+  }
+}
