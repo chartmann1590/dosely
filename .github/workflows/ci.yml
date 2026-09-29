@@ -22,14 +22,37 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --no-daemon
+      - name: Build debug APK (also compiles the cross-promo SDK)
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Run unit tests (app + SDK)
+        run: ./gradlew :app:testDebugUnitTest :hartmann-crosspromo:testDebugUnitTest --no-daemon
 
       - name: Upload APK artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dosely-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Typecheck
+        working-directory: backend
+        run: npm ci && npm run typecheck
+
+      - name: Test
+        working-directory: backend
+        run: npm test
 
   release-check:
     # Manual verification that the AdMob secret plumbing works end to end.
@@ -50,7 +73,7 @@ jobs:
           ADMOB_APPLICATION_ID: ${{ secrets.ADMOB_APPLICATION_ID }}
           ADMOB_BANNER_UNIT_ID: ${{ secrets.ADMOB_BANNER_UNIT_ID }}
           ADMOB_INTERSTITIAL_UNIT_ID: ${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}
-        run: gradle :app:bundleRelease --no-daemon
+        run: ./gradlew :app:bundleRelease --no-daemon
       - name: Upload unsigned AAB
         uses: actions/upload-artifact@v4
         with:
