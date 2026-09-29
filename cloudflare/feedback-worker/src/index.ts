@@ -2,6 +2,7 @@ import type { Env } from "./env";
 import {
   byteLength,
   errorResponse,
+  isFeedbackIssue,
   isValidIssueNumber,
   jsonResponse,
   normalizeAsset,
@@ -41,6 +42,9 @@ import { GitHubApiError, githubRequest } from "./githubApi";
  * GITHUB_TOKEN is checked only as truthiness; its value is never logged,
  * serialized, or returned to any client.
  */
+
+// Hard cap on comment pagination as a safety net.
+const MAX_COMMENT_PAGES = 10;
 
 // Rough abuse-protection ceiling on decoded issue-body size.
 const MAX_REQUEST_BODY_BYTES = 256 * 1024;
@@ -85,7 +89,12 @@ function repoConfigured(env: Env): boolean {
 async function handleGetIssue(env: Env, number: number): Promise<Response> {
   try {
     const res = await githubRequest(env, githubPath(env, `/issues/${number}`), { method: "GET" });
-    const issue = normalizeIssue(await res.json());
+    const raw = asRecord(await res.json()) ?? {};
+    // Only expose issues this service created (never PRs or unrelated issues).
+    if (!isFeedbackIssue(raw)) {
+      return errorResponse("Not found.", 404);
+    }
+    const issue = normalizeIssue(raw);
     return jsonResponse(issue);
   } catch (error) {
     return mapGitHubError(error, "Unable to fetch issue.");
@@ -121,11 +130,28 @@ async function handleCreateIssue(env: Env, request: Request): Promise<Response> 
 
 async function handleGetComments(env: Env, number: number): Promise<Response> {
   try {
-    const res = await githubRequest(env, githubPath(env, `/issues/${number}/comments`), {
-      method: "GET",
-    });
-    const raw = (await res.json()) as unknown[];
-    const comments: NormalizedComment[] = raw.map((c) => normalizeComment(asRecord(c) ?? {}));
+    const issueRes = await githubRequest(env, githubPath(env, `/issues/${number}`), { method: "GET" });
+    if (!isFeedbackIssue(asRecord(await issueRes.json()) ?? {})) {
+      return errorResponse("Not found.", 404);
+    }
+
+    // Page through ALL comments (GitHub default page is 30) so older replies
+    // are never hidden and newly posted comments always appear after refresh.
+    const perPage = 100;
+    let page = 1;
+    const comments: NormalizedComment[] = [];
+    for (;;) {
+      const res = await githubRequest(
+        env,
+        githubPath(env, `/issues/${number}/comments?per_page=${perPage}&page=${page}`),
+        { method: "GET" },
+      );
+      const raw = (await res.json()) as unknown[];
+      for (const c of raw) comments.push(normalizeComment(asRecord(c) ?? {}));
+      if (raw.length < perPage) break;
+      page += 1;
+      if (page > MAX_COMMENT_PAGES) break; // hard safety cap
+    }
     return jsonResponse(comments);
   } catch (error) {
     return mapGitHubError(error, "Unable to fetch comments.");
@@ -143,6 +169,13 @@ async function handlePostComment(env: Env, number: number, request: Request): Pr
   }
 
   try {
+    // Restrict writes to issues this service created. Without this check any
+    // internet client could post as the token owner on unrelated issues/PRs.
+    const issueRes = await githubRequest(env, githubPath(env, `/issues/${number}`), { method: "GET" });
+    if (!isFeedbackIssue(asRecord(await issueRes.json()) ?? {})) {
+      return errorResponse("Not found.", 404);
+    }
+
     const res = await githubRequest(env, githubPath(env, `/issues/${number}/comments`), {
       method: "POST",
       body: JSON.stringify({ body: commentBody }),

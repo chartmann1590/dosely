@@ -1,5 +1,6 @@
 import {
   byteLength,
+  isFeedbackIssue,
   isNonEmptyString,
   isSupportedImageExtension,
   isValidBase64,
@@ -11,6 +12,20 @@ import {
 } from "../src/github";
 import { buildAssetPath, validateAssetRequest } from "../src/assets";
 import { describe, expect, it } from "vitest";
+
+describe("isFeedbackIssue guard", () => {
+  it("accepts issues titled with the feedback marker namespace", () => {
+    expect(isFeedbackIssue({ title: "[Feedback] App crashes on start" })).toBe(true);
+    expect(isFeedbackIssue({ title: "[Feedback Test] integration verification" })).toBe(true);
+  });
+
+  it("rejects unrelated issues and pull requests", () => {
+    expect(isFeedbackIssue({ title: "CI failed on main" })).toBe(false);
+    expect(isFeedbackIssue({ title: "" })).toBe(false);
+    expect(isFeedbackIssue({})).toBe(false);
+    expect(isFeedbackIssue({ title: "[Feedback] looks safe", pull_request: { url: "https://api.github.com/x" } })).toBe(false);
+  });
+});
 
 describe("normalizeIssue", () => {
   it("normalizes a full GitHub issue payload", () => {

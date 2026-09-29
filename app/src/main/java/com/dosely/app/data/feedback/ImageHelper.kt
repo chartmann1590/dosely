@@ -34,12 +34,18 @@ object ImageHelper {
     }
 
     private fun readScaledPngBytes(context: Context, uri: Uri): ByteArray {
-        // First pass: bounds only, to pick a downscale factor.
+        // First pass: bounds only, to pick a downscale factor. decodeStream
+        // returns null here by design while populating outWidth/outHeight, so
+        // success is judged by the bounds, not the null return.
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         runCatching {
-            context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, bounds)
+            }
         }.getOrElse { throw ImageAttachmentException("Could not read the selected image.", it) }
-            ?: throw ImageAttachmentException("The selected file is not a supported image.")
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            throw ImageAttachmentException("The selected file is not a supported image.")
+        }
 
         val sample = chooseSampleSize(bounds.outWidth, bounds.outHeight)
 
@@ -64,11 +70,32 @@ object ImageHelper {
         return pngBytes
     }
 
-    private fun chooseSampleSize(width: Int, height: Int): Int {
+    /** Loads a small bitmap for UI previews, or null if the image can't be read. */
+    fun loadThumbnail(context: Context, uri: Uri): Bitmap? {
+        // Bounds pass to pick a sample size for a ~512px preview.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, bounds)
+            }
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = chooseSampleSize(bounds.outWidth, bounds.outHeight, 512)
+        }
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, opts)
+            }
+        }.getOrNull()
+    }
+
+    private fun chooseSampleSize(width: Int, height: Int, maxDim: Int = MAX_DIMENSION_PX): Int {
         var sample = 1
         var w = width
         var h = height
-        while (w / 2 >= MAX_DIMENSION_PX || h / 2 >= MAX_DIMENSION_PX) {
+        while (w / 2 >= maxDim || h / 2 >= maxDim) {
             w /= 2
             h /= 2
             sample *= 2

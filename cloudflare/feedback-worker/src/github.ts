@@ -86,6 +86,29 @@ export function normalizeAsset(raw: RawContentResponse): NormalizedAsset {
 }
 
 // ---------------------------------------------------------------------------
+// Feedback-issue guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Issues created by this feedback service carry this title-marker namespace:
+ * the Android client sends "[Feedback] <user title>" and integration tests use
+ * "[Feedback Test] ...". We use the marker as a stateless guard so reads and
+ * comment writes are restricted to issues the feedback service itself created
+ * — the worker must never act on unrelated repository issues or pull requests
+ * (PRs are always excluded via the pull_request field).
+ */
+export const FEEDBACK_TITLE_MARKER = "[Feedback";
+
+/** True when a raw GitHub issue was demonstrably created by the feedback service. */
+export function isFeedbackIssue(raw: {
+  title?: unknown;
+  pull_request?: unknown;
+}): boolean {
+  if (raw.pull_request !== undefined && raw.pull_request !== null) return false;
+  return typeof raw.title === "string" && raw.title.startsWith(FEEDBACK_TITLE_MARKER);
+}
+
+// ---------------------------------------------------------------------------
 // Request validation
 // ---------------------------------------------------------------------------
 

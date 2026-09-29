@@ -59,8 +59,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dosely.app.data.feedback.BugReport
+import com.dosely.app.data.feedback.ImageHelper
 import com.dosely.app.translate.S
 import com.dosely.app.ui.components.SectionCard
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -259,11 +262,22 @@ fun IssueDetailsDialog(
     state: FeedbackViewModel.DetailsUiState,
     onRefresh: () -> Unit,
     onReply: (text: String, attachmentUri: Uri?) -> Unit,
+    onReplySucceeded: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     var replyText by remember { mutableStateOf("") }
     var attachmentUri by remember { mutableStateOf<Uri?>(null) }
     val context = LocalContext.current
+
+    // Clear the draft only after the reply actually posted; failures keep the
+    // text and attachment so the user can retry without retyping.
+    LaunchedEffect(state.replyState) {
+        if (state.replyState is FeedbackViewModel.ReplyState.Success) {
+            replyText = ""
+            attachmentUri = null
+            onReplySucceeded()
+        }
+    }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         attachmentUri = uri
@@ -388,9 +402,9 @@ fun IssueDetailsDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    // The draft is cleared only via onReplySucceeded (below) so a
+                    // failed upload/post never discards the user's text or image.
                     onReply(replyText, attachmentUri)
-                    replyText = ""
-                    attachmentUri = null
                 },
                 enabled = replyText.isNotBlank() && state.replyState !is FeedbackViewModel.ReplyState.Submitting && state.error == null,
             ) {
@@ -470,19 +484,20 @@ private fun CommentRow(comment: com.dosely.app.data.feedback.FeedbackComment) {
     }
 }
 
-/** Loads a thumbnail for the attachment preview; null on failure. */
+/**
+ * Loads a sampled thumbnail for the attachment preview off the main thread.
+ * Never decodes the full-size bitmap, so large photos can't freeze the UI or
+ * exhaust memory; returns null while loading or on failure.
+ */
 @Composable
-private fun rememberBitmapFromUri(context: android.content.Context, uri: Uri): androidx.compose.ui.graphics.ImageBitmap? {
-    return remember(uri) {
-        val decoded: ImageBitmap? = try {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                android.graphics.BitmapFactory.decodeStream(stream)
-            }?.asImageBitmap()
-        } catch (_: Exception) {
-            null
-        }
-        decoded
+private fun rememberBitmapFromUri(context: android.content.Context, uri: Uri): ImageBitmap? {
+    var bitmap by remember(uri) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(uri) {
+        bitmap = withContext(Dispatchers.IO) {
+            runCatching { ImageHelper.loadThumbnail(context, uri) }.getOrNull()
+        }?.asImageBitmap()
     }
+    return bitmap
 }
 
 /** Renders a list of locally stored reports as rows inside a SectionCard. */
