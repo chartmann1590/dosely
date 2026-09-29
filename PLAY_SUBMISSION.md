@@ -6,16 +6,25 @@ Items marked ✓ are already handled in the app.
 
 ---
 
-## 1. AdMob: replace test IDs (REQUIRED before release)
+## 1. AdMob: unit IDs — ✓ WIRED VIA GITHUB SECRETS (never in source)
 
-| Where | Current (test) value | Replace with |
-|---|---|---|
-| `app/src/main/AndroidManifest.xml` → `com.google.android.gms.ads.APPLICATION_ID` | `ca-app-pub-3940256099942544~3347511713` | Your real AdMob **App ID** |
-| `app/src/main/java/com/dosely/app/ads/AdsManager.kt` → `BANNER_AD_UNIT` | `ca-app-pub-3940256099942544/9214589741` | Your real **banner ad unit ID** |
+Production IDs are stored as **GitHub repo secrets** and injected at build time via
+environment variables; the repository contains only Google's public test IDs as
+fallbacks. Nothing is hardcoded.
 
-☐ Create an AdMob account, register the app, and create a banner ad unit.
-☐ Keep AdMob's **app ID** and **ad unit ID** linked to this package name (`com.dosely.app`).
-☐ Optionally link AdMob ↔ Play Console for unified metrics.
+| Secret name | Injected into |
+|---|---|
+| `ADMOB_APPLICATION_ID` | manifest placeholder `${admobApplicationId}` → `com.google.android.gms.ads.APPLICATION_ID` |
+| `ADMOB_BANNER_UNIT_ID` | `BuildConfig.ADMOB_BANNER_UNIT_ID` → `AdsManager.BANNER_AD_UNIT` |
+| `ADMOB_INTERSTITIAL_UNIT_ID` | `BuildConfig.ADMOB_INTERSTITIAL_UNIT_ID` (ready for interstitials) |
+
+- Local/debug builds: Google test IDs (`ca-app-pub-3940256099942544…`) — safe.
+- CI: run **Android CI → release-check** (workflow_dispatch) to build a release AAB
+  with the production IDs from secrets (unsigned — sign locally or add a signing secret).
+- Verify before uploading: `aapt2 dump badging app-release.aab` or bundletool manifest
+  shows your `APPLICATION_ID`, and `BuildConfig` mirrors your unit IDs.
+- Interstitial ID is wired end-to-end (secret → BuildConfig) but **not yet shown** in
+  the UI; add a `InterstitialAd` call site when wanted — do not put the ID in code.
 
 ## 2. UMP / Consent (✓ implemented)
 

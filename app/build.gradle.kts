@@ -17,6 +17,24 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         vectorDrawables { useSupportLibrary = true }
+
+        // AdMob IDs are injected from environment/CI secrets and are NEVER
+        // committed to this repository. Local and debug builds fall back to
+        // Google's published test IDs (safe for development and testing).
+        // For a local release build, export ADMOB_APPLICATION_ID,
+        // ADMOB_BANNER_UNIT_ID and ADMOB_INTERSTITIAL_UNIT_ID first.
+        buildConfigField(
+            "String",
+            "ADMOB_BANNER_UNIT_ID",
+            "\"${System.getenv("ADMOB_BANNER_UNIT_ID") ?: "ca-app-pub-3940256099942544/9214589741"}\"",
+        )
+        buildConfigField(
+            "String",
+            "ADMOB_INTERSTITIAL_UNIT_ID",
+            "\"${System.getenv("ADMOB_INTERSTITIAL_UNIT_ID") ?: "ca-app-pub-3940256099942544/1033173712"}\"",
+        )
+        manifestPlaceholders["admobApplicationId"] =
+            System.getenv("ADMOB_APPLICATION_ID") ?: "ca-app-pub-3940256099942544~3347511713"
     }
 
     buildTypes {
@@ -30,7 +48,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 

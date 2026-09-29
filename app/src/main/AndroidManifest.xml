@@ -24,11 +24,12 @@
         <uses-native-library android:name="libvndksupport.so" android:required="false" />
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
 
-        <!-- AdMob: replace with the production application ID before release.
-             The sample value below is Google's published test app ID. -->
+        <!-- AdMob application ID is injected from CI secrets / environment via the
+             admobApplicationId manifest placeholder (see app/build.gradle.kts).
+             It is never committed here. Local builds use Google's test app ID. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="${admobApplicationId}" />
         <!-- AdMob: delay measurement to keep cold start fast. -->
         <meta-data
             android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION"

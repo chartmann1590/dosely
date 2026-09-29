@@ -2,6 +2,7 @@ package com.dosely.app.ads
 
 import android.app.Activity
 import android.content.Context
+import com.dosely.app.BuildConfig
 import com.google.android.gms.ads.MobileAds
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
@@ -76,8 +77,13 @@ class AdsManager constructor(context: Context) {
                 instance ?: AdsManager(context.applicationContext).also { instance = it }
             }
 
-        /** Google's always-on test banner unit. Replace with the production unit before release. */
-        const val BANNER_AD_UNIT =
-            "ca-app-pub-3940256099942544/9214589741"
+        /**
+         * Banner unit injected at build time from CI secrets (Google test ID fallback
+         * for local/debug builds). Never hardcoded to production values in source.
+         */
+        val BANNER_AD_UNIT: String = BuildConfig.ADMOB_BANNER_UNIT_ID
+
+        /** Interstitial unit, same injection scheme. */
+        val INTERSTITIAL_AD_UNIT: String = BuildConfig.ADMOB_INTERSTITIAL_UNIT_ID
     }
 }
