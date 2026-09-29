@@ -13,11 +13,12 @@ class MockKv {
     if (type === 'json') return JSON.parse(v);
     return v;
   }
-  async put(key: string, value: string): Promise<void> {
+  async put(key: string, value: string, _opts?: unknown): Promise<void> {
     this.m.set(key, value);
   }
-  async list(): Promise<{ keys: { name: string }[] }> {
-    return { keys: [...this.m.keys()].map((name) => ({ name })) };
+  async list(opts?: { prefix?: string }): Promise<{ keys: { name: string }[] }> {
+    const prefix = opts?.prefix ?? '';
+    return { keys: [...this.m.keys()].filter((k) => k.startsWith(prefix)).map((name) => ({ name })) };
   }
 }
 
@@ -139,6 +140,52 @@ describe('aggregate analytics math', () => {
     expect(a.firstTs).toBeNull();
   });
 
+  it('concurrent shard writers never drop each other (last-write-wins safe)', async () => {
+    const { env } = mkEnv();
+    const store = new Store(env);
+    const evt = (ts: number) => ({
+      event: 'promo_impression' as const,
+      sourcePackage: 'com.a',
+      targetPackage: 'com.b',
+      placement: 'settings',
+      ts,
+      sdkVersion: null,
+    });
+    // Simulates two uncoordinated /events requests racing on the same day.
+    await store.applyEvents([evt(100)], '2026-09-29', 'shard-one');
+    await store.applyEvents([evt(200)], '2026-09-29', 'shard-two');
+    const agg = (await store.getDailyAggregate('2026-09-29'))!;
+    expect(agg.impressions['com.b|com.a']).toBe(2);
+    expect(agg.totalEvents).toBe(2);
+  });
+
+  it('merges pre-sharding base aggregate with shards', async () => {
+    const { env, kv } = mkEnv();
+    const store = new Store(env);
+    const legacy = { ...emptyAggregate(), impressions: { 'com.b|com.a': 7 }, totalEvents: 7 };
+    await kv.put('daily:2026-09-29', JSON.stringify(legacy));
+    await store.applyEvents(
+      [{ event: 'promo_impression', sourcePackage: 'com.a', targetPackage: 'com.b', placement: 's', ts: 1, sdkVersion: null }],
+      '2026-09-29',
+      'shard-x'
+    );
+    const agg = (await store.getDailyAggregate('2026-09-29'))!;
+    expect(agg.impressions['com.b|com.a']).toBe(8);
+    expect(agg.totalEvents).toBe(8);
+  });
+
+  it('listDailyKeys returns bare day keys across shards', async () => {
+    const { env } = mkEnv();
+    const store = new Store(env);
+    const evt = { event: 'promo_impression', sourcePackage: 'com.a', targetPackage: 'com.b', placement: 's', ts: 1, sdkVersion: null } as const;
+    await store.applyEvents([evt], '2026-09-28', 'a');
+    await store.applyEvents([evt], '2026-09-29', 'b');
+    const days = await store.listDailyKeys();
+    expect(days).toContain('2026-09-28');
+    expect(days).toContain('2026-09-29');
+    expect(days.some((d) => d.includes(':'))).toBe(false);
+  });
+
   it('sanitizeConfig clamps remote config abuse', () => {
     const cfg = sanitizeConfig({
       ...DEFAULT_CONFIG_WIRE,
@@ -153,6 +200,15 @@ describe('aggregate analytics math', () => {
     expect(cfg.newAppBoostDays).toBe(0);
     expect(cfg.sessionRotationHours).toBe(24);
     expect(cfg.enabled).toBe(false);
+  });
+
+  it('sanitizeConfig keeps multipliers above one (default 1.8)', () => {
+    const boosted = sanitizeConfig({ ...DEFAULT_CONFIG_WIRE, newAppBoostMultiplier: 2.5 } as never);
+    expect(boosted.newAppBoostMultiplier).toBe(2.5);
+    const defaulted = sanitizeConfig({ ...DEFAULT_CONFIG_WIRE, newAppBoostMultiplier: 0 } as never);
+    expect(defaulted.newAppBoostMultiplier).toBe(1.8);
+    const negative = sanitizeConfig({ ...DEFAULT_CONFIG_WIRE, newAppBoostMultiplier: -3 } as never);
+    expect(negative.newAppBoostMultiplier).toBe(1.8);
   });
 
   it('emptyRefreshMeta has safe nulls', () => {

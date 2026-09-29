@@ -58,8 +58,16 @@ class PromoCache(private val context: Context) {
     }
 
     suspend fun put(sourcePackage: String, placement: String, response: PromoResponse) {
-        if (response.apps.isEmpty()) return // don't cache empties — try again next time
         val key = keyFor(sourcePackage, placement)
+        if (response.apps.isEmpty()) {
+            // An empty response is AUTHORITATIVE when it comes from the server
+            // (kill switch active, placement disabled, no eligible targets).
+            // Replace any previous entry so cached promos can't outlive the
+            // remote switches. Network failures never reach put() — the
+            // repository catches them and keeps the existing cache.
+            context.promoDataStore.edit { prefs -> prefs.remove(key) }
+            return
+        }
         val now = System.currentTimeMillis()
         val entry = CachedPromo(response, now, now + response.expiresInMs(ttlMs))
         context.promoDataStore.edit { prefs ->

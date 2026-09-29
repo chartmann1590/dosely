@@ -138,7 +138,12 @@ object HartmannPromoViewBinder {
                     recommendationRequestId = null,
                     sdkVersion = HartmannCrossPromo.SDK_VERSION,
                 )
-                PlayStoreLauncher.openPlayStore(context, app.packageName)
+                PlayStoreLauncher.openPlayStore(
+                    context,
+                    app.packageName,
+                    com.hartmann.crosspromo.attribution.HartmannInstallAttribution
+                        .buildReferrerValue(source, app.packageName)
+                )
             }
             contentDescription = buildString {
                 append(app.name ?: app.packageName)

@@ -6,6 +6,11 @@ import androidx.compose.runtime.setValue
 import com.hartmann.crosspromo.HartmannCrossPromo
 import com.hartmann.crosspromo.model.PromoApp
 import com.hartmann.crosspromo.repository.CrossPromoRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /** What the promo UI should render. */
 sealed interface PromoUiState {
@@ -28,20 +33,37 @@ class PromoUiController(
     var state by mutableStateOf<PromoUiState>(PromoUiState.Hidden)
         private set
 
-    /** Reads cache, starts SWR refresh, updates state as data arrives. */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var observing = false
+
+    /**
+     * Reads the cache, starts the SWR refresh, and keeps observing the cache
+     * so state updates when the background refresh lands (including the
+     * cold-install case where the cache is empty until the first response
+     * arrives). Call [dispose] when the hosting screen goes away.
+     */
     fun load() {
         val source = HartmannCrossPromo.sourcePackage()
         val session = HartmannCrossPromo.sessionId()
         repository.refreshIfNeeded(source, placement, limit, session)
-        // Emit cache instantly (repository dedupes the network side).
-        com.hartmann.crosspromo.internal.launchInIo {
-            val cached = runCatching { repository.getCached(source, placement) }.getOrNull()
-            com.hartmann.crosspromo.internal.onMain {
-                state = when {
-                    cached == null || cached.apps.isEmpty() -> PromoUiState.Hidden
-                    else -> PromoUiState.Ready(cached.apps, fromCache = true)
+        if (observing) return
+        observing = true
+        scope.launch {
+            runCatching {
+                repository.observe(source, placement).collect { response ->
+                    com.hartmann.crosspromo.internal.onMain {
+                        state = when {
+                            response == null || response.apps.isEmpty() -> PromoUiState.Hidden
+                            else -> PromoUiState.Ready(response.apps, fromCache = true)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    /** Stops cache observation. Optional: the scope is small and screen-scoped. */
+    fun dispose() {
+        scope.cancel()
     }
 }

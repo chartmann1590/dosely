@@ -4,7 +4,8 @@
  *
  * KV is chosen over D1 deliberately: this deployment's API token scopes cover
  * Workers+KV; all analytics state is aggregate-only, and every write path is
- * batched and size-capped, so KV's consistency semantics are sufficient.
+ * batched, size-capped, and CONFLICT-FREE (per-request shards merged on
+ * read — see applyEvents), so KV's consistency semantics are sufficient.
  */
 import type {
   AppConfig,
@@ -44,6 +45,43 @@ export function emptyAggregate(): DailyAggregate {
     firstTs: null,
     lastTs: null,
   };
+}
+
+/** 'daily:<day>:<shardId>' — per-request analytics shard. */
+function dailyShardKey(day: string, shardId: string): string {
+  return `daily:${day}:${shardId}`;
+}
+
+/** All shard keys for a day (base key included when present). */
+async function listShards(env: Env, day: string): Promise<DailyAggregate[]> {
+  const shards: DailyAggregate[] = [];
+  const base = await env.ANALYTICS_KV.get<DailyAggregate>('daily:' + day, 'json');
+  if (base) shards.push(base); // pre-sharding data
+  const list = await env.ANALYTICS_KV.list({ prefix: `daily:${day}:` });
+  for (const k of list.keys) {
+    const s = await env.ANALYTICS_KV.get<DailyAggregate>(k.name, 'json');
+    if (s) shards.push(s);
+  }
+  return shards;
+}
+
+/** G-counter style merge: numeric fields add; min/max timestamps fold. */
+function mergeShards(shards: DailyAggregate[]): DailyAggregate | null {
+  if (shards.length === 0) return null;
+  const out = emptyAggregate();
+  for (const s of shards) {
+    for (const [k, v] of Object.entries(s.impressions ?? {})) out.impressions[k] = (out.impressions[k] ?? 0) + v;
+    for (const [k, v] of Object.entries(s.clicks ?? {})) out.clicks[k] = (out.clicks[k] ?? 0) + v;
+    for (const [k, v] of Object.entries(s.impressionsPlacement ?? {})) out.impressionsPlacement[k] = (out.impressionsPlacement[k] ?? 0) + v;
+    for (const [k, v] of Object.entries(s.clicksPlacement ?? {})) out.clicksPlacement[k] = (out.clicksPlacement[k] ?? 0) + v;
+    for (const [k, v] of Object.entries(s.impressionsTarget ?? {})) out.impressionsTarget[k] = (out.impressionsTarget[k] ?? 0) + v;
+    for (const [k, v] of Object.entries(s.clicksTarget ?? {})) out.clicksTarget[k] = (out.clicksTarget[k] ?? 0) + v;
+    for (const [k, v] of Object.entries(s.sdk ?? {})) out.sdk[k] = (out.sdk[k] ?? 0) + v;
+    out.totalEvents = Math.min(out.totalEvents + (s.totalEvents ?? 0), 2_000_000);
+    if (s.firstTs != null && (out.firstTs === null || s.firstTs < out.firstTs)) out.firstTs = s.firstTs;
+    if (s.lastTs != null && (out.lastTs === null || s.lastTs > out.lastTs)) out.lastTs = s.lastTs;
+  }
+  return out;
 }
 
 export class Store {
@@ -162,15 +200,25 @@ export class Store {
   // ---------------- analytics ----------------
 
   async getDailyAggregate(day = dayKey()): Promise<DailyAggregate | null> {
-    return this.env.ANALYTICS_KV.get<DailyAggregate>('daily:' + day, 'json');
+    return mergeShards(await listShards(this.env, day));
   }
 
-  /** Merge events into the daily aggregate with hard caps (abuse containment). */
+  /**
+   * Merge events into the daily aggregate with hard caps (abuse containment).
+   *
+   * KV is last-write-wins per key, so concurrent /api/v1/events requests that
+   * all wrote one shared 'daily:<day>' key would silently drop each other's
+   * counters. Instead each request writes its own shard
+   * ('daily:<day>:<shard-id>') and readers merge shards, making writes
+   * conflict-free (crdt-style G-counter per field). shardId should be unique
+   * per request; a random fallback keeps uncoordinated writers apart.
+   */
   async applyEvents(
     events: NormalizedEvent[],
-    day = dayKey()
+    day = dayKey(),
+    shardId: string = 's' + Math.random().toString(36).slice(2, 10)
   ): Promise<DailyAggregate> {
-    const agg = (await this.getDailyAggregate(day)) ?? emptyAggregate();
+    const agg = emptyAggregate();
     for (const e of events) {
       agg.totalEvents = Math.min(agg.totalEvents + 1, 2_000_000);
       const pairKey = `${e.targetPackage}|${e.sourcePackage}`;
@@ -187,13 +235,22 @@ export class Store {
       if (agg.firstTs === null || (e.ts ?? 0) < agg.firstTs) agg.firstTs = e.ts ?? null;
       if (agg.lastTs === null || (e.ts ?? 0) > agg.lastTs) agg.lastTs = e.ts ?? null;
     }
-    await this.env.ANALYTICS_KV.put('daily:' + day, JSON.stringify(agg), { expirationTtl: 60 * 60 * 24 * 40 });
+    await this.env.ANALYTICS_KV.put(
+      dailyShardKey(day, shardId),
+      JSON.stringify(agg),
+      { expirationTtl: 60 * 60 * 24 * 40 }
+    );
     return agg;
   }
 
   async listDailyKeys(): Promise<string[]> {
     const list = await this.env.ANALYTICS_KV.list({ prefix: 'daily:' });
-    return list.keys.map((k) => k.name).sort().reverse().slice(0, 30);
+    const days = new Set<string>();
+    for (const k of list.keys) {
+      // 'daily:<day>' or 'daily:<day>:<shard>' -> keep '<day>'.
+      days.add(k.name.split(':')[1]);
+    }
+    return [...days].sort().reverse().slice(0, 30);
   }
 }
 
@@ -214,13 +271,16 @@ function bump(map: Record<string, number>, key: string, cap: number): void {
 export function sanitizeConfig(cfg: EngineConfig): EngineConfig {
   const clamp01 = (x: unknown, fallback: number) =>
     typeof x === 'number' && Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : fallback;
+  const positive = (x: unknown, fallback: number) =>
+    typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : fallback;
   const intIn = (x: unknown, min: number, max: number, fallback: number) =>
     typeof x === 'number' && Number.isFinite(x) ? Math.min(max, Math.max(min, Math.round(x))) : fallback;
   return {
     enabled: typeof cfg.enabled === 'boolean' ? cfg.enabled : DEFAULT_CONFIG.enabled,
     popularWeight: clamp01(cfg.popularWeight, DEFAULT_CONFIG.popularWeight),
     newAppBoostDays: intIn(cfg.newAppBoostDays, 0, 60, DEFAULT_CONFIG.newAppBoostDays),
-    newAppBoostMultiplier: clamp01(cfg.newAppBoostMultiplier, DEFAULT_CONFIG.newAppBoostMultiplier) || 1,
+    // Multiplier, not share: values above 1 are the point (default 1.8).
+    newAppBoostMultiplier: positive(cfg.newAppBoostMultiplier, DEFAULT_CONFIG.newAppBoostMultiplier),
     defaultLimit: intIn(cfg.defaultLimit, 1, 10, DEFAULT_CONFIG.defaultLimit),
     maxLimit: intIn(cfg.maxLimit, 1, 10, DEFAULT_CONFIG.maxLimit),
     minKeepRatio: clamp01(cfg.minKeepRatio, DEFAULT_CONFIG.minKeepRatio),

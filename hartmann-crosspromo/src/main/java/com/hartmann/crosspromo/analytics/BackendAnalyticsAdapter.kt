@@ -1,11 +1,14 @@
 package com.hartmann.crosspromo.analytics
 
+import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Bundle
 import com.hartmann.crosspromo.api.CrossPromoApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -20,7 +23,9 @@ import java.net.URLEncoder
  * Mirrors promo events to the cross-promotion backend (POST /api/v1/events).
  *
  * Design constraints honored here:
- *  - events are batched (max 20 per request) and flushed opportunistically
+ *  - events are batched (max 20 per request) and flushed by threshold,
+ *    on a periodic timer, and whenever the host app moves to the background
+ *    (so short sessions still reach the server before process death)
  *  - if the queue overflows, OLDEST events are dropped (recent behavior wins)
  *  - all network work happens on a background dispatcher
  *  - failures are silent: analytics is never mission critical
@@ -28,15 +33,46 @@ import java.net.URLEncoder
  */
 class BackendAnalyticsAdapter private constructor(
     private val baseUrl: String,
-    context: Context,
+    private val appContext: Context,
     maxSdkVersion: String,
 ) : CrossPromoAnalytics {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs: SharedPreferences =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val sdkVersion: String = maxSdkVersion
     private var queuedSinceFlush = 0
+
+    // Periodic safety-net flush: guarantees queued events reach the server
+    // even when a session never accumulates FLUSH_THRESHOLD events.
+    private val timerJob = scope.launch {
+        while (true) {
+            delay(FLUSH_INTERVAL_MS)
+            runCatching { flush() }
+        }
+    }
+
+    // App-background flush: the last chance before the process may be killed.
+    private var startedActivities = 0
+    private val lifecycleCallbacks: Application.ActivityLifecycleCallbacks? =
+        (appContext as? Application)?.let { app ->
+            object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityStarted(activity: android.app.Activity) {
+                    startedActivities++
+                }
+
+                override fun onActivityStopped(activity: android.app.Activity) {
+                    startedActivities = (startedActivities - 1).coerceAtLeast(0)
+                    if (startedActivities == 0) flush()
+                }
+
+                override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: Bundle?) {}
+                override fun onActivityResumed(activity: android.app.Activity) {}
+                override fun onActivityPaused(activity: android.app.Activity) {}
+                override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: Bundle) {}
+                override fun onActivityDestroyed(activity: android.app.Activity) {}
+            }.also { app.registerActivityLifecycleCallbacks(it) }
+        }
 
     private fun enqueue(event: kotlinx.serialization.json.JsonObject) {
         val current = prefs.getString(KEY_QUEUE, null) ?: "[]"
@@ -46,6 +82,18 @@ class BackendAnalyticsAdapter private constructor(
         prefs.edit().putString(KEY_QUEUE, next.toString()).apply()
         queuedSinceFlush++
         if (queuedSinceFlush >= FLUSH_THRESHOLD) flush()
+    }
+
+    /**
+     * Flushes pending events, cancels the timer and unregisters lifecycle
+     * hooks. Optional: lets host apps/tests stop the adapter cleanly.
+     */
+    fun shutdown() {
+        runCatching { flush() }
+        timerJob.cancel()
+        (appContext as? Application)?.let { app ->
+            lifecycleCallbacks?.let { app.unregisterActivityLifecycleCallbacks(it) }
+        }
     }
 
     /** Sends queued events; safe to call from anywhere. */
@@ -139,6 +187,7 @@ class BackendAnalyticsAdapter private constructor(
         private const val KEY_QUEUE = "queue"
         private const val MAX_QUEUE = 200
         private const val FLUSH_THRESHOLD = 5
+        private const val FLUSH_INTERVAL_MS = 60_000L
 
         @JvmStatic
         fun create(baseUrl: String, context: Context, sdkVersion: String): BackendAnalyticsAdapter =

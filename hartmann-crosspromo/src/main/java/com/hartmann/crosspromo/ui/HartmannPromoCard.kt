@@ -128,7 +128,12 @@ fun HartmannPromoCard(
                     recommendationRequestId = null,
                     sdkVersion = sdkVersion,
                 )
-                PlayStoreLauncher.openPlayStore(context, app.packageName)
+                PlayStoreLauncher.openPlayStore(
+                    context,
+                    app.packageName,
+                    com.hartmann.crosspromo.attribution.HartmannInstallAttribution
+                        .buildReferrerValue(source, app.packageName)
+                )
             }) {
                 Text("View App")
             }

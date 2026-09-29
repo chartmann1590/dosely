@@ -19,7 +19,7 @@ import { PlayStoreCatalogProvider } from './discovery/PlayStoreCatalogProvider';
 import { refreshCatalog } from './refresh';
 import { Store, sanitizeConfig } from './store';
 import { validateEvent, validateRecommendations, MAX_EVENT_BYTES } from './validation';
-import type { Env, TargetConfig } from './types';
+import type { Env, EngineConfig, TargetConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 
 const JSON_HEADERS = {
@@ -251,7 +251,9 @@ export default {
           }
         }
         if (normalized.length > 0) {
-          await store.applyEvents(normalized);
+          // Per-request shard id: concurrent requests write distinct KV keys,
+          // so last-write-wins KV semantics never drop counters.
+          await store.applyEvents(normalized, undefined, requestId('evt'));
         }
         return json({ accepted: accepted.length, rejected });
       }
@@ -271,7 +273,13 @@ export default {
         if (path === '/api/v1/admin/config' && req.method === 'POST') {
           const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
           if (!body) return err(400, 'invalid_json', 'body must be a JSON object');
-          const next = await store.putConfig(sanitizeConfig({ ...DEFAULT_CONFIG, ...(body as object) }));
+          // Partial patch: apply ONLY fields present in the request.
+          // Spreading DEFAULT_CONFIG here would reset every omitted field.
+          const patch: Partial<EngineConfig> = {};
+          for (const key of Object.keys(DEFAULT_CONFIG) as (keyof EngineConfig)[]) {
+            if (key in body) patch[key] = body[key] as never;
+          }
+          const next = await store.putConfig(patch);
           return json({ config: next });
         }
         if (path === '/api/v1/admin/app-config' && req.method === 'POST') {
@@ -339,7 +347,7 @@ async function adminStatus(store: Store) {
   const perPlacement: Record<string, { impressions: number; clicks: number }> = {};
 
   for (const day of days.slice(0, 7)) {
-    const agg = await store.getDailyAggregate(day.slice('daily:'.length));
+    const agg = await store.getDailyAggregate(day);
     if (!agg) continue;
     totals.impressions += Object.entries(agg.impressions).reduce((s, [, v]) => s + v, 0);
     totals.clicks += Object.entries(agg.clicks).reduce((s, [, v]) => s + v, 0);
