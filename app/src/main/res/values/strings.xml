@@ -248,6 +248,34 @@
     <string name="report_done">Reported. The message was removed from your chat.</string>
     <string name="report_flagged_tag">Reported</string>
 
+    <!-- ============ Support & Feedback (GitHub-backed, via Cloudflare Worker) ============ -->
+    <string name="feedback_support_title">Support &amp; Feedback</string>
+    <string name="feedback_support_sub">Report a problem or check the status of reports you have already sent. Reports go to the Dosely GitHub issue tracker.</string>
+    <string name="feedback_report_button">Report a Problem</string>
+    <string name="feedback_reports_heading">Your submitted reports</string>
+    <string name="feedback_report_title">Report a Problem</string>
+    <string name="feedback_not_configured">Feedback service is not configured for this build.</string>
+    <string name="feedback_field_title">Title / Subject (required)</string>
+    <string name="feedback_field_description">Description (required)</string>
+    <string name="feedback_privacy_warning_1">Your report will be submitted to the Dosely GitHub issue tracker.</string>
+    <string name="feedback_privacy_warning_2">Do not include passwords, private keys, medical information, financial information, account credentials, or anything you do not want visible to repository maintainers.</string>
+    <string name="feedback_privacy_warning_3">Screenshots may contain private information.</string>
+    <string name="feedback_privacy_warning_4">If this repository is public, your report and attached screenshot may be publicly visible.</string>
+    <string name="feedback_include_diagnostics">Include phone/app diagnostics</string>
+    <string name="feedback_field_name">Name (optional)</string>
+    <string name="feedback_field_email">Email (optional)</string>
+    <string name="feedback_attach_screenshot">Attach screenshot</string>
+    <string name="feedback_screenshot_attached">Screenshot attached</string>
+    <string name="feedback_remove_attachment">Remove attachment</string>
+    <string name="feedback_submitted">Report submitted</string>
+    <string name="feedback_submit">Submit</string>
+    <string name="feedback_load_error">Could not load the latest status.</string>
+    <string name="feedback_retry">Retry</string>
+    <string name="feedback_no_comments">No comments yet.</string>
+    <string name="feedback_reply_hint">Write a reply…</string>
+    <string name="feedback_send_reply">Send reply</string>
+    <string name="feedback_refresh">Refresh</string>
+
     <!-- ============ Legal ============ -->
     <string name="legal_tos_title">Terms of Service</string>
     <string name="legal_privacy_title">Privacy Policy</string>

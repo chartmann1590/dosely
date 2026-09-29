@@ -1,0 +1,22 @@
+// Cloudflare Worker configuration for the feedback API.
+//
+// Non-secret configuration only. The GitHub token lives in a Cloudflare
+// Worker SECRET named GITHUB_TOKEN — never in this file.
+//
+// Configure it once with:
+//   npx wrangler secret put GITHUB_TOKEN
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dosely-feedback-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "GITHUB_REPO_OWNER": "chartmann1590",
+    "GITHUB_REPO_NAME": "dosely",
+    "FEEDBACK_ASSETS_DIR": "feedback-assets"
+  },
+  // Limits oversized request bodies before they reach the handler.
+  // Screenshots ride along inside JSON, so 16 MB covers the ~8 MB payload cap.
+  "observability": { "enabled": true }
+}

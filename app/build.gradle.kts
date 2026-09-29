@@ -35,6 +35,16 @@ android {
         )
         manifestPlaceholders["admobApplicationId"] =
             System.getenv("ADMOB_APPLICATION_ID") ?: "ca-app-pub-3940256099942544~3347511713"
+
+        // Cloudflare feedback worker endpoint (NOT a secret — safe to commit).
+        // Overridable via -Pfeedback.worker.url or the FEEDBACK_WORKER_URL env var.
+        buildConfigField(
+            "String",
+            "FEEDBACK_WORKER_URL",
+            "\"${project.findProperty("feedback.worker.url")
+                ?: System.getenv("FEEDBACK_WORKER_URL")
+                ?: "https://dosely-feedback-api.charles-h-hartmann1.workers.dev"}\"",
+        )
     }
 
     buildTypes {

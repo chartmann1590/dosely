@@ -42,10 +42,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dosely.app.ai.DownloadState
 import com.dosely.app.ai.GemmaModelCatalog
+import com.dosely.app.data.feedback.BugReport
 import com.dosely.app.translate.AppLanguages
 import com.dosely.app.translate.S
 import com.dosely.app.ui.components.Chip
 import com.dosely.app.ui.components.SectionCard
+import com.dosely.app.ui.feedback.BugReportList
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -55,6 +57,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var showLanguagePicker by remember { mutableStateOf(false) }
     var showDisclaimer by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var selectedReport by remember { mutableStateOf<BugReport?>(null) }
+
+    val feedbackViewModel: com.dosely.app.ui.feedback.FeedbackViewModel = koinViewModel()
+    val feedbackUiState by feedbackViewModel.reportState.collectAsStateWithLifecycle()
+    val feedbackDetailsState by feedbackViewModel.detailsState.collectAsStateWithLifecycle()
+    val bugReports by feedbackViewModel.bugReports.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -323,6 +332,29 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
                 }
             }
 
+            // Support & Feedback: GitHub-backed bug reports via Cloudflare Worker
+            item {
+                SectionCard {
+                    Text(S("feedback_support_title"), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        S("feedback_support_sub"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { showReportDialog = true }) {
+                        Text(S("feedback_report_button"))
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    if (bugReports.isNotEmpty()) {
+                        Text(S("feedback_reports_heading"), style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(4.dp))
+                        BugReportList(reports = bugReports, onOpenReport = { report -> selectedReport = report })
+                    }
+                }
+            }
+
             // Cross-promotion: other Hartmann Studios apps, discovered dynamically
             // from the backend. Renders nothing when offline/empty/error.
             item {
@@ -331,6 +363,43 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
 
             item { Spacer(Modifier.height(30.dp)) }
         }
+    }
+
+    if (showReportDialog) {
+        com.dosely.app.ui.feedback.ReportProblemDialog(
+            state = feedbackUiState,
+            onSubmit = { title, description, includeDiagnostics, name, email, attachmentUri ->
+                feedbackViewModel.submitReport(
+                    appContext = context.applicationContext,
+                    title = title,
+                    description = description,
+                    includeDiagnostics = includeDiagnostics,
+                    name = name,
+                    email = email,
+                    attachmentUri = attachmentUri,
+                    onSuccess = { },
+                )
+            },
+            onDismiss = {
+                showReportDialog = false
+                feedbackViewModel.resetSubmitState()
+            },
+        )
+    }
+
+    selectedReport?.let { report ->
+        com.dosely.app.ui.feedback.IssueDetailsDialog(
+            report = report,
+            state = feedbackDetailsState,
+            onRefresh = { feedbackViewModel.refreshIssueDetails(report.number) },
+            onReply = { text, attachmentUri ->
+                feedbackViewModel.submitReply(context.applicationContext, report.number, text, attachmentUri) { }
+            },
+            onDismiss = {
+                selectedReport = null
+                feedbackViewModel.resetReplyState()
+            },
+        )
     }
 
     if (showLanguagePicker) {
