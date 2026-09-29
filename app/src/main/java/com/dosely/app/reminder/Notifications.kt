@@ -44,6 +44,8 @@ object Notifications {
         } else true
     }
 
+    // Permission is verified by canNotify() above; lint cannot see the data flow.
+    @android.annotation.SuppressLint("MissingPermission")
     fun post(
         context: Context,
         channelId: String,
