@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Dosely"
 include(":app")
+include(":hartmann-crosspromo")

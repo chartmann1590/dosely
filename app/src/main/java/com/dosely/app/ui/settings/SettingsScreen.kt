@@ -323,6 +323,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
                 }
             }
 
+            // Cross-promotion: other Hartmann Studios apps, discovered dynamically
+            // from the backend. Renders nothing when offline/empty/error.
+            item {
+                com.hartmann.crosspromo.ui.HartmannPromoRow(placement = "settings")
+            }
+
             item { Spacer(Modifier.height(30.dp)) }
         }
     }

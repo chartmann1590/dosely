@@ -10,6 +10,7 @@ import com.dosely.app.reminder.ReminderWorker
 import com.dosely.app.translate.LocalizerHolder
 import com.dosely.app.translate.TranslationService
 import com.dosely.app.widget.DoselyWidgetReceiver
+import com.hartmann.crosspromo.HartmannCrossPromo
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.java.KoinJavaComponent.getKoin
@@ -26,5 +27,14 @@ class DoselyApp : Application() {
         Notifications.ensureChannels(this)
         ReminderWorker.scheduleDaily(this)
         DoselyWidgetReceiver.schedulePeriodicRefresh(this)
+
+        // Hartmann Studios cross-promotion (dynamic catalog from the backend;
+        // fails silently — never affects app functionality).
+        HartmannCrossPromo.initialize(
+            application = this,
+            apiBaseUrl = "https://crosspromo.charleshartmann.com",
+            enableFirebaseAnalytics = false,
+            enableBackendAnalytics = true,
+        )
     }
 }
