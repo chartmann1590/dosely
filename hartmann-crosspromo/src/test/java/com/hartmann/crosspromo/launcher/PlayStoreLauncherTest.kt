@@ -58,4 +58,34 @@ class PlayStoreLauncherTest {
     fun `blank package is rejected`() {
         assertEquals(false, PlayStoreLauncher.openPlayStore(context, ""))
     }
+
+    @Test
+    fun `referrer is appended to market and web urls`() {
+        val referrer =
+            com.hartmann.crosspromo.attribution.HartmannInstallAttribution
+                .buildReferrerValue("com.source.app", "com.charles.qrcode")
+        val intent = PlayStoreLauncher.playListingIntent(context, "com.charles.qrcode", referrer)
+        assertNotNull(intent)
+        assertEquals(
+            "com.charles.qrcode",
+            intent!!.data!!.getQueryParameter("id"),
+        )
+        // Wire format keeps the pre-encoded %3D/%26 escapes…
+        assertTrue(intent.data!!.toString().contains("referrer=utm_source%3Dcom.source.app"))
+        // …while getQueryParameter returns the percent-decoded value. That
+        // decoded form must round-trip back into crosspromo attribution.
+        val attribution =
+            com.hartmann.crosspromo.attribution.HartmannInstallAttribution
+                .parseReferrer(intent.data!!.getQueryParameter("referrer"))
+        assertTrue(attribution.isCrosspromo)
+        assertEquals("com.source.app", attribution.sourcePackage)
+        assertEquals("com.charles.qrcode", attribution.targetPackage)
+    }
+
+    @Test
+    fun `blank referrer is omitted`() {
+        val intent = PlayStoreLauncher.playListingIntent(context, "com.charles.qrcode", "")
+        assertNotNull(intent)
+        assertEquals(null, intent!!.data!!.getQueryParameter("referrer"))
+    }
 }
