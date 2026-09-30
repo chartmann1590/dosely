@@ -27,7 +27,19 @@ fun HartmannPromoRow(
     limit: Int = 3,
     controller: PromoUiController = rememberPromoController(placement, limit),
 ) {
-    LaunchedEffect(placement) { controller.load() }
+    // Re-roll on EVERY entry to this screen — including tab switches that
+    // keep the composition alive but re-RESUME the back-stack entry — plus
+    // once for the initial composition. Forced refreshes dedupe in flight,
+    // so the initial double call issues exactly one request.
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(controller, owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) controller.load()
+        }
+        owner.lifecycle.addObserver(obs)
+        controller.load()
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
 
     when (val s = controller.state) {
         is PromoUiState.Ready -> {
