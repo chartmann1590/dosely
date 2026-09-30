@@ -6,6 +6,8 @@ export interface RecQueryParams {
   placement: string;
   limit: number;
   sessionId: string | null;
+  /** Client variety seed; the server nonce-fills when absent. */
+  seed: string | null;
   exclude: string[];
   locale: string | null;
 }
@@ -39,6 +41,13 @@ export function validateRecommendations(url: URL, maxLimit: number, defaultLimit
     if (!SESSION_RE.test(sessionId)) sessionId = null; // tolerate junk sessions
   }
 
+  // Optional client seed for pick variety; validated like sessionId.
+  let seed: string | null = url.searchParams.get('seed');
+  if (seed != null) {
+    seed = seed.slice(0, 64);
+    if (!SESSION_RE.test(seed)) seed = null;
+  }
+
   const excludeRaw = url.searchParams.get('exclude') ?? '';
   const exclude = excludeRaw
     .split(',')
@@ -50,7 +59,7 @@ export function validateRecommendations(url: URL, maxLimit: number, defaultLimit
   let locale: string | null = localeRaw;
   if (locale != null && (locale.length > 35 || !LOCALE_RE.test(locale))) locale = null;
 
-  return { ok: true, params: { sourcePackage: sp, placement, limit, sessionId, exclude, locale } };
+  return { ok: true, params: { sourcePackage: sp, placement, limit, sessionId, seed, exclude, locale } };
 }
 
 const MAX_EVENT_BYTES = 8 * 1024;

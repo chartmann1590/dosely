@@ -186,11 +186,23 @@ object HartmannPromoViewBinder {
                 }
             )
         }
-        if (app.rating != null) {
+        if (app.rating != null || !app.installText.isNullOrBlank()) {
             textColumn.addView(
                 TextView(context).apply {
-                    text = "★ ${app.rating}"
+                    text = buildString {
+                        app.rating?.let { r ->
+                            append("★ ").append(com.hartmann.crosspromo.ui.formatRating(r))
+                            app.ratingCount?.let { c ->
+                                if (c > 0) append(" (").append(com.hartmann.crosspromo.ui.compactCount(c)).append(")")
+                            }
+                        }
+                        if (!app.installText.isNullOrBlank()) {
+                            if (isNotEmpty()) append("  ·  ")
+                            append(com.hartmann.crosspromo.ui.compactInstalls(app.installText))
+                        }
+                    }
                     textSize = 12f
+                    setTextColor(0x8A000000.toInt())
                 }
             )
         }
