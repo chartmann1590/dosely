@@ -208,10 +208,10 @@ HartmannPromoCarousel(placement = "home")
 HartmannPromoViewBinder.bind("settings", findViewById(R.id.promo_frame))
 ```
 
-Behavior: cached recommendations render instantly (stale-while-revalidate,
-60-minute fallback TTL so picks re-roll about hourly); network failures,
-empty catalogs, or disabled placements render **nothing** — never a spinner,
-never an error. Icons load with Coil when the host provides it, otherwise via
+Behavior: cached recommendations render instantly, and every screen entry
+re-rolls the picks in the background (the cache only bounds offline
+staleness — 60-minute fallback TTL); network failures, empty catalogs, or
+disabled placements render **nothing** — never a spinner, never an error. Icons load with Coil when the host provides it, otherwise via
 the SDK's built-in cached loader. Each card shows the app's Play install
 badge (e.g. `5K+`) and, when the catalog has them, rating stars. Clicks open
 the official Play listing (`market://` → browser fallback); no APK downloads,

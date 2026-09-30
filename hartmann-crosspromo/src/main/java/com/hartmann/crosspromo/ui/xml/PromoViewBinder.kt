@@ -50,7 +50,9 @@ object HartmannPromoViewBinder {
         val session = HartmannCrossPromo.sessionId()
 
         scope.launch {
-            repo.refreshIfNeeded(source, placement, maxCards, session)
+            // Force: every bind() re-rolls the pick set (server varies per
+            // request); the previously cached set still renders instantly.
+            repo.refreshIfNeeded(source, placement, maxCards, session, force = true)
             val cached = runCatching { repo.getCached(source, placement) }.getOrNull()
             val apps = cached?.apps?.take(maxCards) ?: emptyList()
             withContext(Dispatchers.Main) {

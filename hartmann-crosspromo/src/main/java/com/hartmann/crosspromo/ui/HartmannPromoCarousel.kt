@@ -26,7 +26,16 @@ fun HartmannPromoCarousel(
     limit: Int = 3,
     controller: PromoUiController = rememberPromoController(placement, limit),
 ) {
-    LaunchedEffect(placement) { controller.load() }
+    // Re-roll on every screen entry — see HartmannPromoRow for details.
+    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(controller, owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) controller.load()
+        }
+        owner.lifecycle.addObserver(obs)
+        controller.load()
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
 
     when (val s = controller.state) {
         is PromoUiState.Ready -> {
