@@ -4,12 +4,18 @@ import {
   errorResponse,
   isFeedbackIssue,
   isValidIssueNumber,
+  isValidIdempotencyKey,
+  isRecentComment,
+  isRecentIssue,
   jsonResponse,
   normalizeAsset,
   normalizeComment,
+  normalizeFeedbackTitle,
   normalizeIssue,
   readJsonBody,
   asRecord,
+  FEEDBACK_IDEMPOTENCY_HEADER,
+  FEEDBACK_TITLE_MARKER,
   MAX_ASSET_BODY_BYTES,
   MAX_BASE64_BYTES,
   MAX_COMMENT_BODY_BYTES,
@@ -40,6 +46,10 @@ import { GitHubApiError, githubRequest } from "./githubApi";
  *   - Routes, methods, payloads, sizes and filenames are strictly validated.
  *   - The destination GitHub repository is fixed by worker configuration;
  *     clients cannot redirect requests to another repo or host.
+ *   - When FEEDBACK_WORKER_API_KEY is set, every /api request must carry it
+ *     (X-Api-Key); /health stays open for uptime checks. The key is the only
+ *     shared capability embedded in the app and can be rotated without ever
+ *     touching the GitHub token.
  *
  * GITHUB_TOKEN is checked only as truthiness; its value is never logged,
  * serialized, or returned to any client.
@@ -108,6 +118,62 @@ function repoConfigured(env: Env): boolean {
   );
 }
 
+/**
+ * Shared API-key gate (defense in depth beyond rate limiting).
+ *
+ * When FEEDBACK_WORKER_API_KEY is configured, every /api request must present
+ * it in the X-Api-Key header; /health intentionally stays open for uptime
+ * checks. The comparison runs over SHA-256 digests so the secret's length and
+ * prefix never influence timing; the value itself is never logged or echoed.
+ * An unset key means the gate is disabled (local development), falling back to
+ * rate limits + strict payload validation.
+ */
+async function apiKeyValid(request: Request, env: Env): Promise<boolean> {
+  const configured = env.FEEDBACK_WORKER_API_KEY;
+  if (typeof configured !== "string" || configured.length === 0) return true;
+  const provided = request.headers.get("X-Api-Key") ?? "";
+  if (provided.length === 0) return false;
+  const [configuredDigest, providedDigest] = await Promise.all([
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(configured)),
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(provided)),
+  ]);
+  const a = new Uint8Array(configuredDigest);
+  const b = new Uint8Array(providedDigest);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+/**
+ * Lists recent issues in the feedback marker namespace (newest first), bounded
+ * to a few pages. Used by the idempotency scan: a client retrying a failed
+ * submission does so within minutes, so a bounded recent window is enough to
+ * find the first (already-created) issue without walking the whole tracker.
+ */
+async function fetchRecentFeedbackIssues(env: Env): Promise<NormalizedIssue[]> {
+  const results: NormalizedIssue[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const res = await githubRequest(
+      env,
+      githubPath(env, `/issues?state=all&sort=created&direction=desc&per_page=50&page=${page}`),
+      { method: "GET" },
+    );
+    const raw = (await res.json()) as unknown[];
+    for (const item of raw) {
+      const issue = asRecord(item);
+      if (issue === null) continue;
+      // Only marker-namespace issues participate in dedupe (isFeedbackIssue
+      // also excludes PRs); this is what bounds the work on busy trackers.
+      if (!isFeedbackIssue(issue)) continue;
+      if (!isRecentIssue(issue, Date.now())) continue;
+      results.push(normalizeIssue(issue));
+    }
+    if (raw.length < 50) break;
+  }
+  return results;
+}
+
 async function handleGetIssue(env: Env, number: number): Promise<Response> {
   try {
     const res = await githubRequest(env, githubPath(env, `/issues/${number}`), { method: "GET" });
@@ -139,10 +205,36 @@ async function handleCreateIssue(env: Env, request: Request): Promise<Response> 
     return errorResponse("Invalid request.", 400);
   }
 
+  // Idempotency (best effort): the client generates a UUID per report attempt
+  // and reuses it across retries. When present and well-formed, any feedback
+  // issue created with the same embedded key inside the recent window makes
+  // this a duplicate — the existing issue is returned (409) instead of
+  // creating a second one. Keys are never stored outside the issue body, so
+  // no worker-side state exists to leak, prune, or migrate.
+  const idempotencyKeyHeader = request.headers.get(FEEDBACK_IDEMPOTENCY_HEADER);
+  const hasIdempotencyKey = isValidIdempotencyKey(idempotencyKeyHeader);
+  const idempotencyKey = hasIdempotencyKey ? (idempotencyKeyHeader as string) : null;
+  const finalTitle = normalizeFeedbackTitle(title);
+  const finalBody = idempotencyKey
+    ? `${issueBody}\n\n<!-- feedback-key: ${idempotencyKey} -->`
+    : issueBody;
+
   try {
+    if (idempotencyKey !== null) {
+      const keyMarker = `<!-- feedback-key: ${idempotencyKey} -->`;
+      const recent = await fetchRecentFeedbackIssues(env);
+      const duplicate = recent.find((issue) => issue.body?.includes(keyMarker));
+      if (duplicate !== undefined) {
+        return jsonResponse(
+          { error: "An identical report was already submitted.", existingIssue: duplicate },
+          409,
+        );
+      }
+    }
+
     const res = await githubRequest(env, githubPath(env, "/issues"), {
       method: "POST",
-      body: JSON.stringify({ title, body: issueBody }),
+      body: JSON.stringify({ title: finalTitle, body: finalBody }),
     });
     const issue = normalizeIssue(await res.json());
     return jsonResponse(issue, 201);
@@ -201,6 +293,16 @@ async function handlePostComment(env: Env, number: number, request: Request): Pr
     return errorResponse("Invalid request.", 400);
   }
 
+  // Idempotency for replies: the client reuses the UUID it generated for the
+  // original attempt, so a retry after an ambiguous failure (timeout, 502,
+  // dropped connection) can never double-post the same comment.
+  const idempotencyKeyHeader = request.headers.get(FEEDBACK_IDEMPOTENCY_HEADER);
+  const hasIdempotencyKey = isValidIdempotencyKey(idempotencyKeyHeader);
+  const idempotencyKey = hasIdempotencyKey ? (idempotencyKeyHeader as string) : null;
+  const finalBody = idempotencyKey
+    ? `${commentBody}\n\n<!-- feedback-key: ${idempotencyKey} -->`
+    : commentBody;
+
   try {
     // Restrict writes to issues this service created. Without this check any
     // internet client could post as the token owner on unrelated issues/PRs.
@@ -209,9 +311,36 @@ async function handlePostComment(env: Env, number: number, request: Request): Pr
       return errorResponse("Not found.", 404);
     }
 
+    if (idempotencyKey !== null) {
+      const keyMarker = `<!-- feedback-key: ${idempotencyKey} -->`;
+      let page = 1;
+      for (;;) {
+        const listRes = await githubRequest(
+          env,
+          githubPath(env, `/issues/${number}/comments?per_page=50&page=${page}`),
+          { method: "GET" },
+        );
+        const raw = (await listRes.json()) as unknown[];
+        const duplicate = raw.find((c) => {
+          const record = asRecord(c);
+          return (
+            record !== null &&
+            isRecentComment(record, Date.now()) &&
+            typeof record.body === "string" &&
+            record.body.includes(keyMarker)
+          );
+        });
+        if (duplicate !== undefined) {
+          return jsonResponse(normalizeComment(asRecord(duplicate) ?? {}), 200);
+        }
+        if (raw.length < 50 || page >= 5) break;
+        page += 1;
+      }
+    }
+
     const res = await githubRequest(env, githubPath(env, `/issues/${number}/comments`), {
       method: "POST",
-      body: JSON.stringify({ body: commentBody }),
+      body: JSON.stringify({ body: finalBody }),
     });
     const comment = normalizeComment(await res.json());
     return jsonResponse(comment, 201);
@@ -307,14 +436,37 @@ async function handleCreateIssueWithAsset(env: Env, request: Request): Promise<R
     return errorResponse("Invalid request.", 400);
   }
 
+  // Idempotency: same contract as handleCreateIssue — the client-generated
+  // UUID is embedded in the issue body and checked against recently created
+  // feedback issues before a second issue is made.
+  const idempotencyKeyHeader = request.headers.get(FEEDBACK_IDEMPOTENCY_HEADER);
+  const hasIdempotencyKey = isValidIdempotencyKey(idempotencyKeyHeader);
+  const idempotencyKey = hasIdempotencyKey ? (idempotencyKeyHeader as string) : null;
+  const finalTitle = normalizeFeedbackTitle(title);
+  const finalBody = idempotencyKey
+    ? `${issueBody}\n\n<!-- feedback-key: ${idempotencyKey} -->`
+    : issueBody;
+
   const path = attachment !== null ? buildAssetPath(env, attachment.safeFilename) : null;
   let committedSha: string | null = null;
   try {
+    if (idempotencyKey !== null) {
+      const keyMarker = `<!-- feedback-key: ${idempotencyKey} -->`;
+      const recent = await fetchRecentFeedbackIssues(env);
+      const duplicate = recent.find((issue) => issue.body?.includes(keyMarker));
+      if (duplicate !== undefined) {
+        return jsonResponse(
+          { error: "An identical report was already submitted.", existingIssue: duplicate },
+          409,
+        );
+      }
+    }
+
     // The issue references the asset, so the issue is created FIRST. The
     // attachment markdown is appended afterwards via PATCH on success.
     const res = await githubRequest(env, githubPath(env, "/issues"), {
       method: "POST",
-      body: JSON.stringify({ title, body: issueBody }),
+      body: JSON.stringify({ title: finalTitle, body: finalBody }),
     });
     const rawIssue = asRecord(await res.json());
     const issue = normalizeIssue(rawIssue ?? {});
@@ -340,7 +492,9 @@ async function handleCreateIssueWithAsset(env: Env, request: Request): Promise<R
         const url =
           meta.downloadUrl ??
           `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
-        const updatedBody = `${issueBody}\n\n## Attachment\n\n![Screenshot](${url})`;
+        // finalBody (not issueBody) keeps the idempotency marker in the body
+        // so retries after this point still dedupe against the same issue.
+        const updatedBody = `${finalBody}\n\n## Attachment\n\n![Screenshot](${url})`;
         await githubRequest(env, githubPath(env, `/issues/${issue.number}`), {
           method: "PATCH",
           body: JSON.stringify({ body: updatedBody }),
@@ -389,6 +543,16 @@ async function handlePostCommentWithAsset(env: Env, number: number, request: Req
     return errorResponse("Invalid request.", 400);
   }
 
+  // Idempotency for replies: same contract as handlePostComment — the client
+  // reuses the UUID from the original attempt, so retries after ambiguous
+  // failures can never double-post the same reply.
+  const idempotencyKeyHeader = request.headers.get(FEEDBACK_IDEMPOTENCY_HEADER);
+  const hasIdempotencyKey = isValidIdempotencyKey(idempotencyKeyHeader);
+  const idempotencyKey = hasIdempotencyKey ? (idempotencyKeyHeader as string) : null;
+  const finalBodyWithKey = idempotencyKey
+    ? `${commentBody}\n\n<!-- feedback-key: ${idempotencyKey} -->`
+    : commentBody;
+
   const path = attachment !== null ? buildAssetPath(env, attachment.safeFilename) : null;
   let committedSha: string | null = null;
   try {
@@ -398,9 +562,36 @@ async function handlePostCommentWithAsset(env: Env, number: number, request: Req
       return errorResponse("Not found.", 404);
     }
 
+    if (idempotencyKey !== null) {
+      const keyMarker = `<!-- feedback-key: ${idempotencyKey} -->`;
+      let page = 1;
+      for (;;) {
+        const listRes = await githubRequest(
+          env,
+          githubPath(env, `/issues/${number}/comments?per_page=50&page=${page}`),
+          { method: "GET" },
+        );
+        const raw = (await listRes.json()) as unknown[];
+        const duplicate = raw.find((c) => {
+          const record = asRecord(c);
+          return (
+            record !== null &&
+            isRecentComment(record, Date.now()) &&
+            typeof record.body === "string" &&
+            record.body.includes(keyMarker)
+          );
+        });
+        if (duplicate !== undefined) {
+          return jsonResponse(normalizeComment(asRecord(duplicate) ?? {}), 200);
+        }
+        if (raw.length < 50 || page >= 5) break;
+        page += 1;
+      }
+    }
+
     const res = await githubRequest(env, githubPath(env, `/issues/${number}/comments`), {
       method: "POST",
-      body: JSON.stringify({ body: commentBody }),
+      body: JSON.stringify({ body: finalBodyWithKey }),
     });
     const comment = normalizeComment(await res.json());
 
@@ -425,7 +616,9 @@ async function handlePostCommentWithAsset(env: Env, number: number, request: Req
         const url =
           meta.downloadUrl ??
           `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
-        const updatedBody = `${commentBody}\n\n## Attachment\n\n![Screenshot](${url})`;
+        // finalBodyWithKey (not commentBody) keeps the idempotency marker so
+        // retries after this point still dedupe against the same comment.
+        const updatedBody = `${finalBodyWithKey}\n\n## Attachment\n\n![Screenshot](${url})`;
         // Updating a comment uses the global issue-comments endpoint.
         await githubRequest(env, githubPath(env, `/issues/comments/${comment.id}`), {
           method: "PATCH",
@@ -475,6 +668,13 @@ export default {
 
     if (!repoConfigured(env)) {
       return errorResponse("Feedback service is not configured.", 503);
+    }
+
+    // Defense in depth: an optional shared API key required on every /api
+    // route when configured (never on /health). Checked before rate limiting
+    // so unauthenticated hammering is rejected without touching bucket state.
+    if (!(await apiKeyValid(request, env))) {
+      return errorResponse("Unauthorized.", 401);
     }
 
     // Best-effort rate limiting: stricter per-IP budget on reads (each

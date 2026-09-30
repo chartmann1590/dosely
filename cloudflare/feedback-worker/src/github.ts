@@ -90,14 +90,83 @@ export function normalizeAsset(raw: RawContentResponse): NormalizedAsset {
 // ---------------------------------------------------------------------------
 
 /**
- * Issues created by this feedback service carry this title-marker namespace:
- * the Android client sends "[Feedback] <user title>" and integration tests use
- * "[Feedback Test] ...". We use the marker as a stateless guard so reads and
- * comment writes are restricted to issues the feedback service itself created
- * — the worker must never act on unrelated repository issues or pull requests
- * (PRs are always excluded via the pull_request field).
+ * Issues created by this feedback service live in the "[Feedback" title
+ * namespace (the app sends "[Feedback] <user title>", integration tests use
+ * "[Feedback Test] ..."). The marker is the stateless guard that restricts
+ * reads and comment writes to issues this service created — the worker must
+ * never act on unrelated repository issues or pull requests (PRs are always
+ * excluded via the pull_request field).
  */
 export const FEEDBACK_TITLE_MARKER = "[Feedback";
+
+/** The exact prefix the worker stamps onto every issue it creates. */
+export const FEEDBACK_TITLE_PREFIX = "[Feedback] ";
+
+/** The public (non-test) marker form, used for idempotency dedupe scans. */
+export const PUBLIC_FEEDBACK_MARKER = "[Feedback]";
+
+/**
+ * Ensures an issue created by the worker always carries the feedback marker.
+ * The Android client already prefixes its titles, but the worker must not rely
+ * on client behavior: an unmarked issue would be permanently invisible to the
+ * read guard (isFeedbackIssue), making it unreachable for replies and status
+ * syncs — and would sit in the tracker as an unclassifiable issue.
+ *
+ * Marker-namespace titles are preserved as-is (tests use "[Feedback Test]").
+ */
+export function normalizeFeedbackTitle(title: string): string {
+  const trimmed = title.trim();
+  return trimmed.startsWith(FEEDBACK_TITLE_MARKER) ? trimmed : FEEDBACK_TITLE_PREFIX + trimmed;
+}
+
+// ---------------------------------------------------------------------------
+// Best-effort idempotency
+// ---------------------------------------------------------------------------
+
+/** Client-supplied header carrying a client-generated UUID (v4 format). */
+export const FEEDBACK_IDEMPOTENCY_HEADER = "x-idempotency-key";
+
+/** UUID v4 shape; anything else is rejected rather than trusted for dedupe. */
+const IDEMPOTENCY_KEY_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isValidIdempotencyKey(value: unknown): value is string {
+  return typeof value === "string" && IDEMPOTENCY_KEY_PATTERN.test(value);
+}
+
+/**
+ * How far back the dedupe scan looks. A client retries a failed submission
+ * within minutes; scanning recent feedback issues bounds the scan to a few
+ * pages of authenticated GitHub calls at most.
+ */
+export const IDEMPOTENCY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * True when a GitHub issue was created by this service within the idempotency
+ * window. Only issues whose marker namespace matches are considered — the
+ * client-generated key is embedded in the issue body as `<!-- feedback-key: … -->`.
+ */
+export function isRecentIssue(
+  raw: { created_at?: unknown; title?: unknown },
+  now: number,
+): boolean {
+  if (typeof raw.title !== "string" || !raw.title.startsWith(FEEDBACK_TITLE_MARKER)) return false;
+  if (typeof raw.created_at !== "string") return false;
+  const createdAt = Date.parse(raw.created_at);
+  if (!Number.isFinite(createdAt)) return false;
+  return now - createdAt < IDEMPOTENCY_WINDOW_MS;
+}
+
+/**
+ * Same window check for comments: a reply retry happens within minutes, so
+ * only comments created inside the recent window participate in dedupe.
+ */
+export function isRecentComment(raw: { created_at?: unknown }, now: number): boolean {
+  if (typeof raw.created_at !== "string") return false;
+  const createdAt = Date.parse(raw.created_at);
+  if (!Number.isFinite(createdAt)) return false;
+  return now - createdAt < IDEMPOTENCY_WINDOW_MS;
+}
 
 /** True when a raw GitHub issue was demonstrably created by the feedback service. */
 export function isFeedbackIssue(raw: {
@@ -225,7 +294,12 @@ export async function readJsonBody(request: Request, maxBytes: number): Promise<
       merged.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    const parsed = JSON.parse(new TextDecoder().decode(merged));
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(new TextDecoder().decode(merged));
+    } catch {
+      return { ok: false, status: 400 }; // malformed JSON — never let it become a 500
+    }
     const body = asRecord(parsed);
     if (body === null) return { ok: false, status: 400 };
     return { ok: true, body };

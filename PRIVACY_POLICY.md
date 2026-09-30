@@ -50,9 +50,11 @@ the following information is transmitted to and stored in that repository:
   (stripping EXIF metadata) and stored in the repository as an image
   attachment.
 
-Reports are transmitted through our Cloudflare Worker proxy, which adds
-authentication and does not store report data. The recipient is the Dosely
-GitHub repository owned by Charles Hartmann.
+Reports are transmitted through our Cloudflare Worker proxy, which validates
+and forwards them to GitHub and does not store report data. The proxy applies
+rate limiting and an application access key as abuse protection; no GitHub
+credentials are ever present in the app. The recipient is the Dosely GitHub
+repository owned by Charles Hartmann.
 
 **Visibility**: if the repository is public, your report — including any name,
 email, screenshot, and diagnostics — is publicly visible. The report form

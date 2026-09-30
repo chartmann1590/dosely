@@ -45,6 +45,18 @@ android {
                 ?: System.getenv("FEEDBACK_WORKER_URL")
                 ?: "https://dosely-feedback-api.charles-h-hartmann1.workers.dev"}\"",
         )
+
+        // Shared capability key for the feedback worker (defense in depth — the
+        // worker enforces it only when its own secret is configured). Not a
+        // user secret; rotate by redeploying the worker + app. Overridable via
+        // -Pfeedback.api.key or the FEEDBACK_API_KEY env var; empty disables.
+        buildConfigField(
+            "String",
+            "FEEDBACK_API_KEY",
+            "\"${project.findProperty("feedback.api.key")
+                ?: System.getenv("FEEDBACK_API_KEY")
+                ?: ""}\"",
+        )
     }
 
     buildTypes {

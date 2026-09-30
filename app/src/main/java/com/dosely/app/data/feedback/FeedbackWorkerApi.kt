@@ -5,6 +5,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.DefaultRequest
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -69,10 +70,26 @@ class FeedbackWorkerApi(
         }
     }
 
+    /**
+     * Shared headers for every write: the configured API key (when present —
+     * the worker enforces it only when its own key secret is set) and the
+     * client-generated idempotency key so retried submissions never create
+     * duplicate issues or comments.
+     */
+    private fun HttpRequestBuilder.writeHeaders(idempotencyKey: String?) {
+        if (BuildConfig.FEEDBACK_API_KEY.isNotEmpty()) {
+            header("X-Api-Key", BuildConfig.FEEDBACK_API_KEY)
+        }
+        if (idempotencyKey != null) {
+            header("X-Idempotency-Key", idempotencyKey)
+        }
+    }
+
     suspend fun createIssue(request: CreateIssueRequest): FeedbackIssue {
         val response = execute {
             client.post("api/issues") {
                 contentType(io.ktor.http.ContentType.Application.Json)
+                writeHeaders(request.idempotencyKey)
                 setBody(json.encodeToString(request))
             }
         }
@@ -96,6 +113,7 @@ class FeedbackWorkerApi(
         val response = execute {
             client.post("api/issues/$number/comments") {
                 contentType(io.ktor.http.ContentType.Application.Json)
+                writeHeaders(request.idempotencyKey)
                 setBody(json.encodeToString(request))
             }
         }
@@ -107,6 +125,7 @@ class FeedbackWorkerApi(
         val response = execute {
             client.post("api/assets") {
                 contentType(io.ktor.http.ContentType.Application.Json)
+                writeHeaders(null)
                 setBody(json.encodeToString(UploadAssetRequest(fileName, contentBase64)))
             }
         }
@@ -124,6 +143,7 @@ class FeedbackWorkerApi(
         val response = execute {
             client.post("api/issues-with-asset") {
                 contentType(io.ktor.http.ContentType.Application.Json)
+                writeHeaders(request.idempotencyKey)
                 setBody(json.encodeToString(request))
             }
         }
@@ -136,6 +156,7 @@ class FeedbackWorkerApi(
         val response = execute {
             client.post("api/issues/$number/comments-with-asset") {
                 contentType(io.ktor.http.ContentType.Application.Json)
+                writeHeaders(request.idempotencyKey)
                 setBody(json.encodeToString(request))
             }
         }

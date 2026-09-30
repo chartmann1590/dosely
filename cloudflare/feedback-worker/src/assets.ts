@@ -11,25 +11,38 @@ import { isValidBase64 } from "./github";
  * a structurally complete image — not merely carry valid magic bytes. A
  * header-only check would let an attacker prepend FF D8 FF (or the PNG/WebP
  * signature) to arbitrary bytes and have the worker commit them to repository
- * history, so validateAssetRequest parses the full image structure:
+ * history, so validateAssetRequest parses the full image structure. Because a
+ * valid container can itself smuggle data, the walk is also an ALLOWLIST:
  *
  *   - PNG: 8-byte signature, a complete chunk walk (length/type/CRC32 with
- *     zlib CRC verification per chunk, IHDR first, IEND last, no truncation).
+ *     zlib CRC verification per chunk, IHDR first, IEND last, no truncation),
+ *     only critical/recognized chunks accepted, at least one IDAT required.
+ *     tEXt/iTXt/zTXt metadata chunks (a classic smuggling channel) are
+ *     rejected, so arbitrary text cannot ride inside a well-formed PNG.
  *   - JPEG: SOI marker, a full segment walk with length checks until SOS,
- *     terminated by an EOI marker as the final two bytes.
+ *     terminated by an EOI marker as the final two bytes. Comment (COM) and
+ *     application (APPn) segments — free-form payload areas — are rejected
+ *     outright rather than length-checked, so arbitrary bytes cannot be
+ *     hidden in length-delimited segments.
  *   - WebP: RIFF container with declared sizes that match the payload, a
- *     VP8/VP8L/VP8X payload chunk, and no trailing garbage.
+ *     VP8/VP8L/VP8X payload chunk, and no trailing garbage. Metadata sidecar
+ *     chunks (ICCP/EXIF/XMP) and animation chunks are rejected — the client
+ *     re-encodes to plain PNG anyway, so no legitimate upload ever carries
+ *     them.
  *
  * Arbitrary non-image data therefore cannot be committed under an image
- * extension, and images with appended payloads are rejected too.
+ * extension, and data smuggled inside otherwise-valid image containers is
+ * rejected too.
  */
 
 /**
  * Builds the GitHub contents path for an asset. The directory comes from the
  * worker config, never from the client, so uploads stay under FEEDBACK_ASSETS_DIR.
+ * The dir also defaults here (mirroring the Env wiring) so a missing variable
+ * degrades to the standard location instead of raising a 500 from the handler.
  */
-export function buildAssetPath(env: { FEEDBACK_ASSETS_DIR: string }, safeFilename: string): string {
-  const dir = env.FEEDBACK_ASSETS_DIR.replace(/^\/+|\/+$/g, "") || "feedback-assets";
+export function buildAssetPath(env: { FEEDBACK_ASSETS_DIR?: string }, safeFilename: string): string {
+  const dir = (env.FEEDBACK_ASSETS_DIR ?? "").replace(/^\/+|\/+$/g, "") || "feedback-assets";
   return `${dir}/${safeFilename}`;
 }
 
@@ -38,6 +51,17 @@ export type ImageFormat = "png" | "jpeg" | "webp";
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SOI = [0xff, 0xd8, 0xff];
 const WEBP_MAX_FILE_BYTES = 12 * 1024 * 1024;
+
+/**
+ * PNG chunks the client's re-encoder can legitimately emit, plus the palette
+ * chunks any color-type PNG may require. Everything else — tEXt/iTXt/zTXt
+ * (arbitrary text), unknown private chunks, and other ancillary chunk types —
+ * is rejected so a well-formed PNG container cannot carry smuggled payloads.
+ */
+const PNG_ALLOWED_CHUNKS = new Set([
+  "IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM",
+  "sRGB", "iCCP", "sBIT", "bKGD", "hIST", "sPLT", "pHYs", "tIME",
+]);
 
 // Content formats accepted per file extension (jpg is an alias of jpeg).
 const EXTENSION_CONTENT: Record<string, readonly ImageFormat[]> = {
@@ -124,6 +148,7 @@ export function isCompletePng(bytes: Uint8Array): boolean {
   let offset = 8;
   let firstChunk = true;
   let sawIEND = false;
+  let idatBytes = 0;
   while (offset + 12 <= bytes.length) {
     const dataLength = u32be(bytes, offset);
     const type = asciiAt(bytes, offset + 4);
@@ -134,6 +159,8 @@ export function isCompletePng(bytes: Uint8Array): boolean {
     if (firstChunk && type !== "IHDR") return false;
     firstChunk = false;
     if (type === "IHDR" && dataLength !== 13) return false;
+    if (!PNG_ALLOWED_CHUNKS.has(type)) return false; // unknown/ancillary chunks rejected
+    if (type === "IDAT") idatBytes += dataLength;
     const storedCrc = u32be(bytes, chunkEnd);
     if (storedCrc !== crc32(bytes, offset + 4, chunkEnd)) return false;
     if (type === "IEND") {
@@ -145,6 +172,7 @@ export function isCompletePng(bytes: Uint8Array): boolean {
     offset = crcEnd;
   }
   if (!sawIEND || offset !== bytes.length) return false; // truncated or trailing data
+  if (idatBytes === 0) return false; // no image data: container-only smuggling shell
   return true;
 }
 
@@ -189,6 +217,8 @@ export function isCompleteJpeg(bytes: Uint8Array): boolean {
       offset += 2; // standalone markers carry no length
       continue;
     }
+    if (marker === 0xfe) return false; // COM: free-form comment segment
+    if (marker >= 0xe0 && marker <= 0xef) return false; // APPn: free-form payload segments
     const segmentLength = u16be(bytes, offset + 2);
     if (segmentLength < 2) return false;
     if (marker === 0xda) {
@@ -215,20 +245,23 @@ export function isCompleteJpeg(bytes: Uint8Array): boolean {
   }
 }
 
-// Chunks the WebP container spec defines. Every chunk in the file must be
-// one of these, so junk bytes cannot be dressed up as extra chunks.
-const WEBP_KNOWN_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X", "ALPH", "ANIM", "ANMF", "ICCP", "EXIF", "XMP "]);
-// Chunks that carry the actual image bitstream; the first chunk must be one.
-const WEBP_PAYLOAD_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X"]);
+/**
+ * WebP chunks accepted from this client. The Android app re-encodes every
+ * attachment to plain PNG, so a VP8X-capable WebP with metadata sidecars or
+ * animation frames never arrives legitimately — and each of those chunk types
+ * is a documented arbitrary-data channel. Only a bare VP8 (lossy) or VP8L
+ * (lossless) bitstream is accepted.
+ */
+const WEBP_ALLOWED_CHUNKS = new Set(["VP8 ", "VP8L"]);
 
 /**
  * WebP: requires the RIFF/WEBP container with a declared size that matches
  * the payload (allowing the odd-byte padding byte the spec permits), then
  * walks every chunk — FourCC, little-endian size, data, pad byte — until the
- * exact RIFF boundary. The first chunk must be the VP8/VP8L/VP8X bitstream,
- * VP8X is exactly 10 bytes per spec, every FourCC must be a known chunk
- * type, and nothing may trail the container. A one-byte VP8X followed by
- * arbitrary data therefore fails the walk.
+ * exact RIFF boundary. The first chunk must be the VP8/VP8L bitstream, every
+ * FourCC must be an allowed chunk type (VP8X/metadata/animation containers
+ * are rejected), and nothing may trail the container. A one-byte VP8X
+ * followed by arbitrary data therefore fails the walk.
  */
 export function isCompleteWebp(bytes: Uint8Array): boolean {
   // 12-byte RIFF/WEBP header + an 8-byte chunk header + at least 1 data byte.
@@ -249,12 +282,8 @@ export function isCompleteWebp(bytes: Uint8Array): boolean {
     const chunkSize = u32le(bytes, offset + 4);
     const dataEnd = offset + 8 + chunkSize;
     if (dataEnd > riffEnd) return false;
-    if (!WEBP_KNOWN_CHUNKS.has(fourcc)) return false;
-    if (!sawPayloadChunk) {
-      if (!WEBP_PAYLOAD_CHUNKS.has(fourcc)) return false;
-      if (fourcc === "VP8X" && chunkSize !== 10) return false;
-      sawPayloadChunk = true;
-    }
+    if (!WEBP_ALLOWED_CHUNKS.has(fourcc)) return false;
+    if (!sawPayloadChunk) sawPayloadChunk = true;
     offset = dataEnd % 2 === 1 ? dataEnd + 1 : dataEnd; // odd chunks carry a pad byte
   }
   return sawPayloadChunk && (offset === riffEnd || offset === riffEnd + 1);

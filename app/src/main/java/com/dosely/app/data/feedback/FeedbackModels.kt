@@ -17,10 +17,17 @@ data class BugReport(
 // Worker API models (normalized by the Cloudflare Worker)
 // ---------------------------------------------------------------------------
 
+/**
+ * Client-generated UUID v4 sent as the X-Idempotency-Key header. Retrying the
+ * SAME logical submission reuses the key so the worker can return the already
+ * created issue/comment instead of duplicating it; edited content gets a
+ * fresh key so user edits are never swallowed by dedupe.
+ */
 @Serializable
 data class CreateIssueRequest(
     val title: String,
     val body: String,
+    val idempotencyKey: String? = null,
 )
 
 @Serializable
@@ -58,6 +65,7 @@ data class FeedbackComment(
 @Serializable
 data class PostCommentRequest(
     val body: String,
+    val idempotencyKey: String? = null,
 )
 
 /**
@@ -72,6 +80,8 @@ data class CreateIssueWithAssetRequest(
     val body: String,
     val attachmentFileName: String? = null,
     @SerialName("attachmentContentBase64") val attachmentContentBase64: String? = null,
+    /** See [CreateIssueRequest.idempotencyKey]. */
+    val idempotencyKey: String? = null,
 )
 
 /** Comment posting with an inline attachment; see [CreateIssueWithAssetRequest]. */
@@ -80,6 +90,8 @@ data class PostCommentWithAssetRequest(
     val body: String,
     val attachmentFileName: String? = null,
     @SerialName("attachmentContentBase64") val attachmentContentBase64: String? = null,
+    /** See [CreateIssueRequest.idempotencyKey]. */
+    val idempotencyKey: String? = null,
 )
 
 @Serializable

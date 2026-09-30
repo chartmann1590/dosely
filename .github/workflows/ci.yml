@@ -54,6 +54,27 @@ jobs:
         working-directory: backend
         run: npm test
 
+  feedback-worker:
+    # Typecheck + unit tests for the Cloudflare feedback proxy on every PR
+    # that touches it, mirroring the backend job.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/feedback-worker/package-lock.json
+
+      - name: Typecheck
+        working-directory: cloudflare/feedback-worker
+        run: npm ci && npm run typecheck
+
+      - name: Test
+        working-directory: cloudflare/feedback-worker
+        run: npm test
+
   release-check:
     # Manual verification that the AdMob secret plumbing works end to end.
     # The AAB is unsigned (no signing config in CI) — upload artifact only.
@@ -73,6 +94,7 @@ jobs:
           ADMOB_APPLICATION_ID: ${{ secrets.ADMOB_APPLICATION_ID }}
           ADMOB_BANNER_UNIT_ID: ${{ secrets.ADMOB_BANNER_UNIT_ID }}
           ADMOB_INTERSTITIAL_UNIT_ID: ${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}
+          FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
         run: ./gradlew :app:bundleRelease --no-daemon
       - name: Upload unsigned AAB
         uses: actions/upload-artifact@v4

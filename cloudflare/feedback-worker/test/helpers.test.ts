@@ -2,11 +2,15 @@ import {
   byteLength,
   isFeedbackIssue,
   isNonEmptyString,
+  isRecentComment,
+  isRecentIssue,
   isSupportedImageExtension,
   isValidBase64,
+  isValidIdempotencyKey,
   isValidIssueNumber,
   normalizeAsset,
   normalizeComment,
+  normalizeFeedbackTitle,
   normalizeIssue,
   sanitizeFilename,
 } from "../src/github";
@@ -181,12 +185,11 @@ describe("asset upload validation", () => {
   // Complete, structurally valid 1x1 PNG: IHDR + IDAT + IEND (real-world bytes).
   const tinyPngB64 =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-  // Structurally complete JPEG: SOI + APP0(JFIF) + DQT + DHT + SOF0 + SOS +
-  // entropy data + EOI, with every segment length matching its payload.
+  // Structurally complete JPEG with NO APP segments (the worker rejects
+  // COM/APPn outright as arbitrary-data channels): SOI + DQT + DHT + SOF0 +
+  // SOS + entropy data + EOI, every segment length matching its payload.
   const jpegBytes: number[] = [
     0xff, 0xd8, // SOI
-    // APP0/JFIF: 14 payload bytes, declared length 16.
-    0xff, 0xe0, ...u16(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
     // DQT: 64 payload bytes, declared length 66.
     0xff, 0xdb, ...u16(66), ...Array.from({ length: 64 }, (_, i) => i),
     // DHT: 1 + 16 + 1 = 18 payload bytes, declared length 20.
@@ -198,11 +201,12 @@ describe("asset upload validation", () => {
     0xff, 0xd9, // EOI
   ];
   const jpegHeaderB64 = b64(jpegBytes);
-  // Structurally valid WebP: RIFF/WEBP + VP8X chunk (declared sizes consistent:
-  // 30 total bytes -> RIFF size 22; VP8X chunk size 10 matches its 10 data bytes).
+  // Structurally valid minimal WebP: RIFF/WEBP + a bare VP8 (lossy) chunk
+  // (declared sizes consistent: 30 total bytes -> RIFF size 22; VP8 chunk size
+  // 10 matches its 10 data bytes). VP8X containers are rejected by the worker.
   const webpBytes: number[] = [
     0x52, 0x49, 0x46, 0x46, ...u32le(22), 0x57, 0x45, 0x42, 0x50,
-    0x56, 0x50, 0x38, 0x58, ...u32le(10), 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x56, 0x50, 0x38, 0x20, ...u32le(10), 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   ];
   const webpHeaderB64 = b64(webpBytes);
   // Plain UTF-8 text — the attack payload class: valid base64, real bytes,
@@ -301,6 +305,75 @@ describe("asset upload validation", () => {
     expect(await validateAssetRequest("ok.png", "aGVsbG8 world")).toBeNull();
   });
 
+  it("rejects data smuggled in ancillary PNG chunks (tEXt, private chunks)", async () => {
+    const hiddenPayload = Array.from("arbitrary hidden payload", (c) => c.charCodeAt(0));
+    const pngWithText = b64([
+      ...PNG_SIG,
+      ...pngChunk("IHDR", [...u32be(1), ...u32be(1), 8, 2, 0, 0, 0]),
+      ...pngChunk("tEXt", hiddenPayload),
+      ...pngChunk("IDAT", [0x00]),
+      ...pngChunk("IEND", []),
+    ]);
+    expect(await validateAssetRequest("smug.png", pngWithText)).toBeNull();
+
+    const pngWithPrivateChunk = b64([
+      ...PNG_SIG,
+      ...pngChunk("IHDR", [...u32be(1), ...u32be(1), 8, 2, 0, 0, 0]),
+      ...pngChunk("prVt", hiddenPayload),
+      ...pngChunk("IDAT", [0x00]),
+      ...pngChunk("IEND", []),
+    ]);
+    expect(await validateAssetRequest("smug2.png", pngWithPrivateChunk)).toBeNull();
+  });
+
+  it("rejects PNG containers that carry no image data at all", async () => {
+    const pngWithoutIdat = b64([
+      ...PNG_SIG,
+      ...pngChunk("IHDR", [...u32be(1), ...u32be(1), 8, 2, 0, 0, 0]),
+      ...pngChunk("IEND", []),
+    ]);
+    expect(await validateAssetRequest("shell.png", pngWithoutIdat)).toBeNull();
+  });
+
+  it("rejects data smuggled in JPEG COM/APP segments", async () => {
+    const smugglePayload = Array.from("#!/bin/sh\nrm -rf /", (c) => c.charCodeAt(0));
+    const jpegWithCom = b64([
+      0xff, 0xd8,
+      0xff, 0xfe, ...u16(2 + smugglePayload.length), ...smugglePayload,
+      0xff, 0xc0, ...u16(11), 0x08, ...u16(1), ...u16(1), 0x01, 0x01, 0x11, 0x00,
+      0xff, 0xda, ...u16(8), 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0xfc, 0xaa,
+      0xff, 0xd9,
+    ]);
+    expect(await validateAssetRequest("smug.jpg", jpegWithCom)).toBeNull();
+
+    const jpegWithApp1 = b64([
+      0xff, 0xd8,
+      0xff, 0xe1, ...u16(2 + smugglePayload.length), ...smugglePayload,
+      0xff, 0xc0, ...u16(11), 0x08, ...u16(1), ...u16(1), 0x01, 0x01, 0x11, 0x00,
+      0xff, 0xda, ...u16(8), 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0xfc, 0xaa,
+      0xff, 0xd9,
+    ]);
+    expect(await validateAssetRequest("smug3.jpg", jpegWithApp1)).toBeNull();
+  });
+
+  it("rejects WebP containers with VP8X or metadata chunks", async () => {
+    // VP8X (10 bytes) + VP8 (2 bytes): RIFF payload 28, file 36, no pad byte.
+    const webpWithVp8x: number[] = [
+      0x52, 0x49, 0x46, 0x46, ...u32le(28), 0x57, 0x45, 0x42, 0x50,
+      0x56, 0x50, 0x38, 0x58, ...u32le(10), 0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      0x56, 0x50, 0x38, 0x20, ...u32le(2), 0x00, 0x00,
+    ];
+    expect(await validateAssetRequest("smug.webp", webpWithVp8x)).toBeNull();
+
+    // VP8 (2 bytes) + EXIF sidecar (4 bytes): RIFF payload 22, file 30.
+    const webpWithExif: number[] = [
+      0x52, 0x49, 0x46, 0x46, ...u32le(22), 0x57, 0x45, 0x42, 0x50,
+      0x56, 0x50, 0x38, 0x20, ...u32le(2), 0x00, 0x00,
+      0x45, 0x58, 0x49, 0x46, ...u32le(4), 0xde, 0xad, 0xbe, 0xef,
+    ];
+    expect(await validateAssetRequest("smug4.webp", webpWithExif)).toBeNull();
+  });
+
   it("builds paths strictly under the assets dir", async () => {
     expect(buildAssetPath({ FEEDBACK_ASSETS_DIR: "feedback-assets" }, "x.png")).toBe(
       "feedback-assets/x.png",
@@ -308,5 +381,50 @@ describe("asset upload validation", () => {
     expect(buildAssetPath({ FEEDBACK_ASSETS_DIR: "/feedback-assets/" }, "x.png")).toBe(
       "feedback-assets/x.png",
     );
+    // Missing variable must fall back to the default dir, never crash (B4).
+    expect(buildAssetPath({}, "x.png")).toBe("feedback-assets/x.png");
+    expect(buildAssetPath({ FEEDBACK_ASSETS_DIR: undefined }, "x.png")).toBe(
+      "feedback-assets/x.png",
+    );
+  });
+});
+
+describe("feedback title normalization (write-side guard)", () => {
+  it("forces the [Feedback] marker onto unmarked titles", () => {
+    expect(normalizeFeedbackTitle("App crashes on start")).toBe("[Feedback] App crashes on start");
+    expect(normalizeFeedbackTitle("   Unpadded title   ")).toBe("[Feedback] Unpadded title");
+  });
+
+  it("preserves existing marker-namespace titles", () => {
+    expect(normalizeFeedbackTitle("[Feedback] Crash")).toBe("[Feedback] Crash");
+    expect(normalizeFeedbackTitle("[Feedback Test] integration")).toBe("[Feedback Test] integration");
+  });
+});
+
+describe("idempotency helpers", () => {
+  it("accepts only well-formed UUID v4 keys", () => {
+    expect(isValidIdempotencyKey("7b7d1c5e-9f2a-4c3b-8d1e-2f4a5b6c7d8e")).toBe(true);
+    expect(isValidIdempotencyKey("7B7D1C5E-9F2A-4C3B-8D1E-2F4A5B6C7D8E")).toBe(true);
+    expect(isValidIdempotencyKey("7b7d1c5e-9f2a-1c3b-8d1e-2f4a5b6c7d8e")).toBe(false); // v1
+    expect(isValidIdempotencyKey("7b7d1c5e9f2a4c3b8d1e2f4a5b6c7d8e")).toBe(false); // no dashes
+    expect(isValidIdempotencyKey("not-a-uuid")).toBe(false);
+    expect(isValidIdempotencyKey(undefined)).toBe(false);
+  });
+
+  it("isRecentIssue bounds dedupe scans to the recent window", () => {
+    const now = Date.parse("2026-09-30T05:00:00Z");
+    expect(isRecentIssue({ title: "[Feedback] x", created_at: "2026-09-30T04:45:00Z" }, now)).toBe(true);
+    expect(isRecentIssue({ title: "[Feedback] x", created_at: "2026-09-30T03:00:00Z" }, now)).toBe(false);
+    expect(isRecentIssue({ title: "Unrelated", created_at: "2026-09-30T04:45:00Z" }, now)).toBe(false);
+    expect(isRecentIssue({ title: "[Feedback] x" }, now)).toBe(false);
+    expect(isRecentIssue({ title: "[Feedback] x", created_at: "garbage" }, now)).toBe(false);
+  });
+
+  it("isRecentComment validates timestamps for reply dedupe", () => {
+    const now = Date.parse("2026-09-30T05:00:00Z");
+    expect(isRecentComment({ created_at: "2026-09-30T04:59:00Z" }, now)).toBe(true);
+    expect(isRecentComment({ created_at: "2026-09-29T05:00:00Z" }, now)).toBe(false);
+    expect(isRecentComment({ created_at: "garbage" }, now)).toBe(false);
+    expect(isRecentComment({}, now)).toBe(false);
   });
 });

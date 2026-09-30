@@ -136,6 +136,11 @@ class FeedbackViewModel(
         }
 
         _reportState.value = _reportState.value.copy(submitState = SubmitState.UploadingAttachment())
+        // One UUID per submission attempt; retries of the SAME logical report
+        // (user taps submit again after a failure) reuse it so the worker can
+        // dedupe. Editing the report before resubmitting generates a fresh key
+        // because this fun runs from the top again.
+        val idempotencyKey = UUID.randomUUID().toString()
         viewModelScope.launch {
             try {
                 // Read/encode the image locally only; the upload happens
@@ -156,7 +161,14 @@ class FeedbackViewModel(
                     appendLine("- Email: ${email?.trim()?.takeIf { it.isNotEmpty() } ?: "Not provided"}")
                     if (includeDiagnostics) {
                         appendLine()
-                        append(DiagnosticsHelper.collect(appContext))
+                        // StatFs and the ActivityManager binder call in
+                        // DiagnosticsHelper are blocking syscalls/IPC; keep
+                        // them off the main thread alongside the image work.
+                        append(
+                            withContext(Dispatchers.Default) {
+                                DiagnosticsHelper.collect(appContext)
+                            },
+                        )
                     }
                 }
 
@@ -167,6 +179,7 @@ class FeedbackViewModel(
                         body = body,
                         attachmentFileName = attachmentBase64?.let { generateAttachmentFileName("issue") },
                         attachmentContentBase64 = attachmentBase64,
+                        idempotencyKey = idempotencyKey,
                     ),
                 )
 
@@ -294,6 +307,9 @@ class FeedbackViewModel(
         }
         if (_detailsState.value.replyState is ReplyState.Submitting) return
 
+        // One UUID per reply attempt; reused only by retries of this same
+        // logical reply (see submitReport).
+        val idempotencyKey = UUID.randomUUID().toString()
         viewModelScope.launch {
             if (_detailsState.value.issueNumber == issueNumber) {
                 _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Submitting)
@@ -317,6 +333,7 @@ class FeedbackViewModel(
                         body = commentBody,
                         attachmentFileName = attachmentBase64?.let { generateAttachmentFileName("comment-$issueNumber") },
                         attachmentContentBase64 = attachmentBase64,
+                        idempotencyKey = idempotencyKey,
                     ),
                 )
                 // Publish completion only into the state this reply owns: if

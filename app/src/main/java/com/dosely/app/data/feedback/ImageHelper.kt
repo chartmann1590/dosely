@@ -93,21 +93,20 @@ object ImageHelper {
 
     /**
      * Picks the power-of-two [BitmapFactory.Options.inSampleSize] so the
-     * DECODED long edge is no larger than [maxDim] (the decoded edge lands in
-     * [maxDim/2, maxDim)).
+     * DECODED long edge lands below [maxDim] (it falls in [maxDim/2, maxDim)).
      *
-     * The old condition (`w / 2 >= maxDim`) stopped one halving too early:
-     * for a 4032x3024 camera photo it returned sample=1, decoding a ~12 MP
-     * (~49 MB) bitmap in full before [scaleDown] allocated another scaled
-     * copy — enough to kill the app on memory-constrained devices. Sampling
-     * first bounds the decode to ~(maxDim)^2 pixels; [scaleDown] then fine-
-     * trims to exactly [maxDim] when the power-of-two step overshot.
+     * The loop halving stops as soon as the long edge is strictly below
+     * [maxDim]; decoding then re-downscales further if the sample step
+     * overshot. Note the edge case that motivated this shape: with the
+     * previous `>= maxDim * 2` condition a 4032px camera photo (4032 < 4096)
+     * was never halved at all, decoding a ~12 MP (~49 MB) bitmap in full —
+     * the exact memory spike this helper exists to prevent.
      */
     private fun chooseSampleSize(width: Int, height: Int, maxDim: Int = MAX_DIMENSION_PX): Int {
         var sample = 1
         var w = width
         var h = height
-        while (maxOf(w, h) >= maxDim * 2) {
+        while (maxOf(w, h) > maxDim) {
             w /= 2
             h /= 2
             sample *= 2
