@@ -225,6 +225,8 @@
 
     <!-- ============ Common ============ -->
     <string name="common_ok">OK</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_close">Close</string>
     <string name="common_error">Something went wrong</string>
     <string name="common_retry">Retry</string>
     <string name="common_delete">Delete</string>
