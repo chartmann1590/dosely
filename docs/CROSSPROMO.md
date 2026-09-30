@@ -55,7 +55,7 @@ is preserved 1:1 in KV keys.
 |---|---|---|
 | `PlayStoreCatalogProvider` | `backend/src/discovery/` | The ONLY code that touches Google. Discovery + metadata parsing with structural fallbacks. |
 | Refresh pipeline | `backend/src/refresh.ts` | Merge, budget-gated enrichment, safety validation, atomic LKG swap. |
-| Recommendation engine | `backend/src/engine.ts` | Popularity score, 65/35 weighted/exploration draw, new-app boost, dedupe, session rotation. |
+| Recommendation engine | `backend/src/engine.ts` | Popularity score, 65/35 weighted/exploration draw, per-app share cap, bounded new-app boost, per-request variety seed, dedupe. |
 | API routes | `backend/src/index.ts` | Versioned endpoints, validation, rate limiting, admin auth. |
 | Store | `backend/src/store.ts` | KV persistence: catalogs, config, refresh meta, capped daily aggregates. |
 | Android SDK | `hartmann-crosspromo/` | API client, DataStore SWR cache, Compose + XML UI, analytics sinks, install referrer attribution. |
@@ -208,10 +208,14 @@ HartmannPromoCarousel(placement = "home")
 HartmannPromoViewBinder.bind("settings", findViewById(R.id.promo_frame))
 ```
 
-Behavior: cached recommendations render instantly (stale-while-revalidate);
-network failures, empty catalogs, or disabled placements render **nothing** —
-never a spinner, never an error. Clicks open the official Play listing
-(`market://` → browser fallback); no APK downloads, ever.
+Behavior: cached recommendations render instantly (stale-while-revalidate,
+60-minute fallback TTL so picks re-roll about hourly); network failures,
+empty catalogs, or disabled placements render **nothing** — never a spinner,
+never an error. Icons load with Coil when the host provides it, otherwise via
+the SDK's built-in cached loader. Each card shows the app's Play install
+badge (e.g. `5K+`) and, when the catalog has them, rating stars. Clicks open
+the official Play listing (`market://` → browser fallback); no APK downloads,
+ever.
 
 ### 4. Install attribution (target app, optional)
 

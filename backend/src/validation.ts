@@ -6,6 +6,8 @@ export interface RecQueryParams {
   placement: string;
   limit: number;
   sessionId: string | null;
+  /** Client variety seed; the server nonce-fills when absent. */
+  seed: string | null;
   exclude: string[];
   locale: string | null;
 }
@@ -39,6 +41,13 @@ export function validateRecommendations(url: URL, maxLimit: number, defaultLimit
     if (!SESSION_RE.test(sessionId)) sessionId = null; // tolerate junk sessions
   }
 
+  // Optional client seed for pick variety; validated like sessionId.
+  let seed: string | null = url.searchParams.get('seed');
+  if (seed != null) {
+    seed = seed.slice(0, 64);
+    if (!SESSION_RE.test(seed)) seed = null;
+  }
+
   const excludeRaw = url.searchParams.get('exclude') ?? '';
   const exclude = excludeRaw
     .split(',')
@@ -50,7 +59,7 @@ export function validateRecommendations(url: URL, maxLimit: number, defaultLimit
   let locale: string | null = localeRaw;
   if (locale != null && (locale.length > 35 || !LOCALE_RE.test(locale))) locale = null;
 
-  return { ok: true, params: { sourcePackage: sp, placement, limit, sessionId, exclude, locale } };
+  return { ok: true, params: { sourcePackage: sp, placement, limit, sessionId, seed, exclude, locale } };
 }
 
 const MAX_EVENT_BYTES = 8 * 1024;
@@ -83,8 +92,10 @@ export function validateEvent(
   const targetPackage = typeof e.targetPackage === 'string' ? e.targetPackage : '';
   if (!PKG_RE.test(sourcePackage) || sourcePackage.length > 200) return { ok: false, error: 'sourcePackage invalid' };
   if (!PKG_RE.test(targetPackage) || targetPackage.length > 200) return { ok: false, error: 'targetPackage invalid' };
-  // Bot/spam protection: both packages must be Hartmann catalog members.
-  if (!catalogPackages.has(sourcePackage)) return { ok: false, error: 'sourcePackage not in catalog' };
+  // Bot/spam protection: the TARGET must be a Hartmann catalog member (that
+  // is the abuse surface — events about apps we never promote). The SOURCE
+  // is whichever host app displayed the card and need not itself be a promo
+  // target (e.g. Dosely is not in the Play catalog it advertises for).
   if (!catalogPackages.has(targetPackage)) return { ok: false, error: 'targetPackage not in catalog' };
 
   const placement = typeof e.placement === 'string' ? e.placement.slice(0, 40) : '';

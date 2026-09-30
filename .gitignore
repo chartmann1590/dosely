@@ -37,3 +37,10 @@ __pycache__/
 # Kotlin/Native & build session dirs
 .kotlin/
 backend/node_modules/
+cloudflare/feedback-worker/node_modules/
+
+# Local secret files (never commit)
+.dev.vars
+.dev.vars.*
+.wrangler/
+.env

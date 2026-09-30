@@ -1,0 +1,19 @@
+{
+  "name": "feedback-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker that proxies narrowly-scoped feedback operations to GitHub Issues for the Dosely Android app.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260702.1",
+    "typescript": "5.9.3",
+    "vitest": "2.1.9",
+    "wrangler": "4.38.0"
+  }
+}

@@ -66,6 +66,11 @@ function requestId(seedSalt: string): string {
   return id;
 }
 
+/** Per-request variety nonce — varies picks, carries no security weight. */
+function nonce(): string {
+  return Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+}
+
 function verifyAdmin(req: Request, env: Env): boolean {
   const header = req.headers.get('authorization') ?? '';
   const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
@@ -191,7 +196,10 @@ export default {
             exclude: p.exclude,
             locale: p.locale,
             now: Date.now(),
-            seedSalt: p.placement,
+            // Per-request variety: clients may pin picks with ?seed=, otherwise
+            // every request re-rolls within the eligible pool. (Session-based
+            // stability is intentionally handled by the client cache TTL.)
+            seedSalt: p.seed ?? nonce(),
           },
         });
 

@@ -101,8 +101,12 @@ class PromoCache(private val context: Context) {
     )
 
     companion object {
-        /** Default 6h TTL; the server's expiresAt can shorten/extend this. */
-        const val DEFAULT_TTL_MS: Long = 6 * 60 * 60 * 1000
+        /**
+         * 60-minute fallback TTL (the server's expiresAt can only shorten it).
+         * Kept short on purpose: picks re-roll about hourly instead of sticking
+         * for half a day, so placements show varied apps across visits.
+         */
+        const val DEFAULT_TTL_MS: Long = 60 * 60 * 1000
     }
 }
 

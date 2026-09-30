@@ -63,6 +63,17 @@ export interface RecommendResult {
 export const HOURS_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
+/** Share of exploration draws a new app can win (bounded visibility spike). */
+const NEW_APP_DRAW_P = 0.15;
+
+/**
+ * No single app may hold more than this share of the total weighted-pool
+ * weight. Popularity gaps (e.g. one app with 5,000+ installs over a field
+ * of 0–100 install apps) otherwise let one app dominate every weighted draw.
+ * Iteratively clamped so the cap stays meaningful after renormalization.
+ */
+const MAX_APP_WEIGHT_SHARE = 0.25;
+
 /** Popularity: installs first; only trust ratingCount/rating when installs are absent. */
 export function popularityScore(a: EngineApp): number {
   const installMin = a.estimatedMinimumInstalls ?? null;
@@ -208,6 +219,10 @@ export function recommend(input: RecommendInput): RecommendResult {
   }
 
   const rng = seededRandom(
+    // The seed includes the request's seedSalt, which the API fills with a
+    // fresh per-request nonce — every request re-rolls within the catalog.
+    // (seedSalt is client-supplied and NOT trusted for security; it only
+    // varies the pick. Eligibility and excludes are enforced structurally.)
     `${request.sessionId ?? 'anon'}|${request.seedSalt}|${sessionWindow(request.now, config.sessionRotationHours)}`
   );
 
@@ -224,9 +239,11 @@ export function recommend(input: RecommendInput): RecommendResult {
     let type: SelectionType;
 
     if (explore) {
-      // Exploration draw: uniform. New apps get pulled into the weighted draw.
+      // Exploration draw: uniform. New apps get a bounded leg up: they win
+      // the draw with probability NEW_APP_DRAW_P (not 50% — an unbounded
+      // boost let the newest 2–3 apps dominate every exploration slot).
       const boosted = pool.filter((a) => isNewApp(a, config, request.now));
-      if (boosted.length > 0 && rng() < 0.5) {
+      if (boosted.length > 0 && rng() < NEW_APP_DRAW_P) {
         const idx = Math.floor(rng() * boosted.length) % boosted.length;
         picked = boosted[idx];
         type = 'new_app_boost';
@@ -236,14 +253,28 @@ export function recommend(input: RecommendInput): RecommendResult {
         type = 'random';
       }
     } else {
-      // Weighted draw over pool.
+      // Weighted draw over pool, with a per-app share cap so a lopsided
+      // install distribution can never monopolize the weighted channel.
       const weighted = pool.map((a) => {
         const base = popularityScore(a);
         const boost = explorationMultiplier(a, config, request.now);
         const mult = a.promotionMultiplier * boost.multiplier;
         return { app: a, weight: Math.max(0.01, base * mult), boost };
       });
-      const total = weighted.reduce((s, w) => s + w.weight, 0);
+      let total = weighted.reduce((s, w) => s + w.weight, 0);
+      for (let iter = 0; iter < 4; iter++) {
+        const cap = total * MAX_APP_WEIGHT_SHARE;
+        let clamped = false;
+        for (const w of weighted) {
+          if (w.weight > cap) {
+            w.weight = cap;
+            clamped = true;
+          }
+        }
+        const next = weighted.reduce((s, w) => s + w.weight, 0);
+        if (!clamped || next === total) break;
+        total = next;
+      }
       let r = rng() * total;
       let hit = weighted[weighted.length - 1];
       for (const w of weighted) {

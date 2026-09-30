@@ -240,12 +240,14 @@ describe('event validation (bot/spam protection)', () => {
     expect(v.ok).toBe(true);
   });
 
-  it('rejects packages outside the catalog', () => {
+  it('rejects targets outside the catalog; unknown source hosts are fine', () => {
+    // The source is whichever host app displayed the card — it need not be a
+    // promo target itself (Dosely is not in the catalog it advertises for).
     const v = validateEvent(
       { event: 'promo_click', sourcePackage: 'com.evil.spam', targetPackage: 'com.hartmann.target', placement: 'x' },
       catalogPackages
     );
-    expect(v.ok).toBe(false);
+    expect(v.ok).toBe(true);
     const v2 = validateEvent(
       { event: 'promo_click', sourcePackage: 'com.hartmann.source', targetPackage: 'com.other.app', placement: 'x' },
       catalogPackages
