@@ -92,8 +92,10 @@ export function validateEvent(
   const targetPackage = typeof e.targetPackage === 'string' ? e.targetPackage : '';
   if (!PKG_RE.test(sourcePackage) || sourcePackage.length > 200) return { ok: false, error: 'sourcePackage invalid' };
   if (!PKG_RE.test(targetPackage) || targetPackage.length > 200) return { ok: false, error: 'targetPackage invalid' };
-  // Bot/spam protection: both packages must be Hartmann catalog members.
-  if (!catalogPackages.has(sourcePackage)) return { ok: false, error: 'sourcePackage not in catalog' };
+  // Bot/spam protection: the TARGET must be a Hartmann catalog member (that
+  // is the abuse surface — events about apps we never promote). The SOURCE
+  // is whichever host app displayed the card and need not itself be a promo
+  // target (e.g. Dosely is not in the Play catalog it advertises for).
   if (!catalogPackages.has(targetPackage)) return { ok: false, error: 'targetPackage not in catalog' };
 
   const placement = typeof e.placement === 'string' ? e.placement.slice(0, 40) : '';
