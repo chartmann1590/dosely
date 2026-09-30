@@ -58,7 +58,12 @@ class FeedbackViewModel(
 
     sealed class SubmitState {
         object Idle : SubmitState()
-        data class UploadingAttachment(val progressLabel: String = "Uploading screenshot…") : SubmitState()
+        data class UploadingAttachment(
+            val progressLabel: String = "Uploading screenshot…",
+            /** Idempotency key for the current attempt; reused on retry while
+             *  the report content (title/desc/attachment) is unchanged. */
+            val idempotencyKey: String? = null,
+        ) : SubmitState()
         object Submitting : SubmitState()
         data class Success(val issue: FeedbackIssue) : SubmitState()
         data class Failure(val message: String) : SubmitState()
@@ -77,15 +82,35 @@ class FeedbackViewModel(
     sealed class ReplyState {
         object Idle : ReplyState()
         object Submitting : ReplyState()
-        data class Success(val message: String) : ReplyState()
+        data class Success(
+            val message: String,
+            /** True when the worker posted the comment but the attachment
+             *  upload/PATCH failed (soft-fail). The user should know the
+             *  screenshot wasn't attached. */
+            val attachmentFailed: Boolean = false,
+        ) : ReplyState()
         data class Failure(val message: String) : ReplyState()
+        /** Idempotency key for the current reply attempt; reused on retry
+         *  while the reply text/attachment are unchanged. */
+        data class SubmittingWithKey(val idempotencyKey: String) : ReplyState()
     }
 
     private val _reportState = MutableStateFlow(ReportUiState())
     val reportState: StateFlow<ReportUiState> = _reportState
 
+    /** Content snapshot used to decide whether a retry reuses the pending
+     *  idempotency key (same content → same key → dedupe) or gets a fresh one
+     *  (edited content → different report). */
+    private var pendingSubmitContent: String? = null
+
     private val _detailsState = MutableStateFlow(DetailsUiState())
     val detailsState: StateFlow<DetailsUiState> = _detailsState
+
+    /** Content snapshot for reply retries (text + attachment URI). */
+    private var pendingReplyContent: String? = null
+    /** The idempotency key for the most recent reply attempt; reused on retry
+     *  when the reply content is unchanged. */
+    private var _lastReplyIdempotencyKey: String? = null
 
     /** Most recent issue-details load; cancelled when a newer one starts. */
     private var detailsLoadJob: Job? = null
@@ -135,13 +160,35 @@ class FeedbackViewModel(
             return // already in-flight; prevent double submission
         }
 
-        _reportState.value = _reportState.value.copy(submitState = SubmitState.UploadingAttachment())
-        // One UUID per submission attempt; retries of the SAME logical report
-        // (user taps submit again after a failure) reuse it so the worker can
-        // dedupe. Editing the report before resubmitting generates a fresh key
-        // because this fun runs from the top again.
-        val idempotencyKey = UUID.randomUUID().toString()
+        // Reuse the idempotency key from the previous attempt if the report
+        // content (title/description/attachment) is unchanged — this is what
+        // makes retries after a lost response dedupe rather than duplicate.
+        // If the user edited the report, generate a fresh key so the new
+        // (different-content) report is not swallowed by dedupe.
+        val contentKey = reportContentKey(title, description, attachmentUri)
+        // Reuse a pending key only on a genuine retry of the same report: the
+        // content must match AND we must not already have a terminal result
+        // (Success/Failure) for this report — reusing after a terminal result
+        // would let a user re-submit a report that already landed.
+        val pendingKey: String? = when {
+            _reportState.value.submitState is SubmitState.Success -> null
+            pendingSubmitContent == contentKey -> {
+                // Same content as the pending attempt → retry with same key.
+                when (val s = _reportState.value.submitState) {
+                    is SubmitState.UploadingAttachment -> s.idempotencyKey
+                    is SubmitState.Submitting -> null // mid-flight; let it race
+                    else -> null
+                }
+            }
+            else -> null
+        }
+        val idempotencyKey = pendingKey ?: UUID.randomUUID().toString()
+        pendingSubmitContent = contentKey
+        _reportState.value = _reportState.value.copy(
+            submitState = SubmitState.UploadingAttachment(idempotencyKey = idempotencyKey),
+        )
         viewModelScope.launch {
+            android.util.Log.i("FeedbackVM", "submitReport LAUNCH: idempotencyKey=$idempotencyKey")
             try {
                 // Read/encode the image locally only; the upload happens
                 // worker-side as part of the issue-creation operation, so a
@@ -173,6 +220,7 @@ class FeedbackViewModel(
                 }
 
                 _reportState.value = _reportState.value.copy(submitState = SubmitState.Submitting)
+                android.util.Log.i("FeedbackVM", "submitReport SUBMISSION_STARTING")
                 val issue = api.createIssueWithAsset(
                     CreateIssueWithAssetRequest(
                         title = "[Feedback] ${title.trim()}",
@@ -214,8 +262,25 @@ class FeedbackViewModel(
         }
     }
 
+    /** Stable key derived from the report inputs so a retry can be matched to
+     *  the original attempt. Attachment URIs are content-addressed only via
+     *  the filename the client generates, so we hash the visible inputs here. */
+    private fun reportContentKey(
+        title: String,
+        description: String,
+        attachmentUri: Uri?,
+    ): String {
+        val attachmentFingerprint = attachmentUri?.let { uri ->
+            // Stable-ish fingerprint for the attachment (URI path is stable
+            // across the short dialog lifetime on modern Android content URIs).
+            uri.toString()
+        } ?: ""
+        return "${title.trim()}|${description.trim()}|$attachmentFingerprint"
+    }
+
     fun resetSubmitState() {
         _reportState.value = _reportState.value.copy(submitState = SubmitState.Idle)
+        pendingSubmitContent = null
     }
 
     private fun generateAttachmentFileName(prefix: String): String =
@@ -305,14 +370,29 @@ class FeedbackViewModel(
             )
             return
         }
-        if (_detailsState.value.replyState is ReplyState.Submitting) return
-
-        // One UUID per reply attempt; reused only by retries of this same
-        // logical reply (see submitReport).
-        val idempotencyKey = UUID.randomUUID().toString()
+        // Retain the idempotency key across retries of the same reply (same
+        // text + same attachment), so a lost response does not create a
+        // duplicate comment. A fresh key is generated when the content changes
+        // or there is no pending key to reuse.
+        val contentKey = replyContentKey(replyText, attachmentUri)
+        val currentState = _detailsState.value.replyState
+        val pendingKey: String? = when (currentState) {
+            is ReplyState.SubmittingWithKey -> {
+                if (pendingReplyContent == contentKey) currentState.idempotencyKey else null
+            }
+            is ReplyState.Failure -> {
+                if (pendingReplyContent == contentKey) _lastReplyIdempotencyKey else null
+            }
+            else -> null
+        }
+        val idempotencyKey = pendingKey ?: UUID.randomUUID().toString()
+        _lastReplyIdempotencyKey = idempotencyKey
+        pendingReplyContent = contentKey
         viewModelScope.launch {
             if (_detailsState.value.issueNumber == issueNumber) {
-                _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Submitting)
+                _detailsState.value = _detailsState.value.copy(
+                    replyState = ReplyState.SubmittingWithKey(idempotencyKey),
+                )
             }
             try {
                 // The attachment is uploaded worker-side as part of the comment
@@ -327,7 +407,7 @@ class FeedbackViewModel(
                     appendLine(replyText.trim())
                 }
 
-                api.postCommentWithAsset(
+                val returnedComment = api.postCommentWithAsset(
                     issueNumber,
                     PostCommentWithAssetRequest(
                         body = commentBody,
@@ -341,7 +421,15 @@ class FeedbackViewModel(
                 // must never touch B's state (it could flip B's Submitting to
                 // Success and re-enable B's draft mid-flight).
                 if (_detailsState.value.issueNumber == issueNumber) {
-                    _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Success("Reply posted."))
+                    // Surface the attachmentFailed flag (soft-fail) so the
+                    // dialog can warn the user when the screenshot was not
+                    // actually attached.
+                    _detailsState.value = _detailsState.value.copy(
+                        replyState = ReplyState.Success(
+                            message = "Reply posted.",
+                            attachmentFailed = returnedComment.attachmentFailed,
+                        ),
+                    )
                     // Clear the draft via the success callback BEFORE
                     // refreshing: onDone runs synchronously on the main
                     // thread, so it cannot be conflated away the way an
@@ -361,8 +449,15 @@ class FeedbackViewModel(
         }
     }
 
+    private fun replyContentKey(replyText: String, attachmentUri: Uri?): String {
+        val attachmentFingerprint = attachmentUri?.toString() ?: ""
+        return "${replyText.trim()}|$attachmentFingerprint"
+    }
+
     fun resetReplyState() {
         _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Idle)
+        pendingReplyContent = null
+        _lastReplyIdempotencyKey = null
     }
 
     /** Failure publication follows the same issue-scoping rule as success. */

@@ -251,8 +251,51 @@ export function isCompleteJpeg(bytes: Uint8Array): boolean {
  * animation frames never arrives legitimately — and each of those chunk types
  * is a documented arbitrary-data channel. Only a bare VP8 (lossy) or VP8L
  * (lossless) bitstream is accepted.
+ *
+ * In addition to the FourCC allowlist, the bitstream contents of each VP8/
+ * VP8L chunk are validated: the first bytes must match a known VP8/VP8L frame
+ * tag so arbitrary bytes (even several MB) stuffed into a correctly-named
+ * chunk are rejected. This is the WebP analogue of rejecting JPEG COM/APPn
+ * segments — the chunk name alone is not trusted.
  */
 const WEBP_ALLOWED_CHUNKS = new Set(["VP8 ", "VP8L"]);
+
+/**
+ * The VP8 (lossy, "VP8 ") keyframe frame tag bytes. A VP8 keyframe starts
+ * with `0x9d 0x01` followed by 2 bytes of width and 2 bytes of height (all
+ * little-endian), so a 1x1 keyframe begins `0x9d 0x01 0x01 0x00 0x01 0x00`.
+ * Non-keyframe VP8 slices also start with different frame-type bytes, but a
+ * screenshot uploaded by the client is always a single keyframe; anything else
+ * is treated as non-image.
+ */
+const VP8_KEYFRAME_TAG = new Uint8Array([0x9d, 0x01]);
+/** VP8L ("VP8L") lossless image header tag. */
+const VP8L_IMAGE_HEADER = new Uint8Array([0x2f, 0x78, 0xda]);
+
+/**
+ * True when [bytes] begins with a known VP8 or VP8L frame tag and is large
+ * enough to contain a complete frame header (keyframe tag + at least 1 pixel
+ * of dimensions). Arbitrary bytes stuffed into a correctly-named VP8/VP8L
+ * chunk fail this check.
+ */
+export function isValidVp8Vp8lBitstream(bytes: Uint8Array): boolean {
+  if (bytes.length < 6) return false; // need at least 6 bytes for a frame tag + 1x1
+  const start = bytes[0];
+  if (start === 0x9d && bytes[1] === 0x01) {
+    // VP8 keyframe: bytes 2-3 = width, 4-5 = height (little-endian), both > 0.
+    const w = bytes[2] | (bytes[3] << 8);
+    const h = bytes[4] | (bytes[5] << 8);
+    return w > 0 && h > 0;
+  }
+  if (bytes[0] === 0x2f && bytes[1] === 0x78 && bytes[2] === 0xda) {
+    // VP8L lossless image header: bytes 3-4 = width, 5-6 = height.
+    if (bytes.length < 7) return false;
+    const w = bytes[3] | (bytes[4] << 8);
+    const h = bytes[5] | (bytes[6] << 8);
+    return w > 0 && h > 0;
+  }
+  return false; // unknown/not-a-frame tag
+}
 
 /**
  * WebP: requires the RIFF/WEBP container with a declared size that matches
@@ -283,7 +326,14 @@ export function isCompleteWebp(bytes: Uint8Array): boolean {
     const dataEnd = offset + 8 + chunkSize;
     if (dataEnd > riffEnd) return false;
     if (!WEBP_ALLOWED_CHUNKS.has(fourcc)) return false;
-    if (!sawPayloadChunk) sawPayloadChunk = true;
+    if (!sawPayloadChunk) {
+      // The FourCC name alone is not enough — validate the bitstream starts
+      // with a known VP8/VP8L frame tag so arbitrary bytes (even several MB)
+      // stuffed into a correctly-named chunk are rejected.
+      const chunkData = bytes.slice(offset + 8, dataEnd);
+      if (!isValidVp8Vp8lBitstream(chunkData)) return false;
+      sawPayloadChunk = true;
+    }
     offset = dataEnd % 2 === 1 ? dataEnd + 1 : dataEnd; // odd chunks carry a pad byte
   }
   return sawPayloadChunk && (offset === riffEnd || offset === riffEnd + 1);

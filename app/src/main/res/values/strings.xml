@@ -270,6 +270,8 @@
     <string name="feedback_screenshot_attached">Screenshot attached</string>
     <string name="feedback_remove_attachment">Remove attachment</string>
     <string name="feedback_submitted">Report submitted</string>
+    <string name="feedback_submitted_attachment_failed">Report submitted, but the screenshot was not attached (try again)</string>
+    <string name="feedback_reply_attachment_failed">Reply posted, but the screenshot was not attached (try again)</string>
     <string name="feedback_submit">Submit</string>
     <string name="feedback_load_error">Could not load the latest status.</string>
     <string name="feedback_retry">Retry</string>

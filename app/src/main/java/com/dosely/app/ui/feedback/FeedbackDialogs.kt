@@ -222,11 +222,23 @@ fun ReportProblemDialog(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    is FeedbackViewModel.SubmitState.Success -> Text(
-                        S("feedback_submitted") + " (#${submitState.issue.number})",
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    is FeedbackViewModel.SubmitState.Success -> {
+                        // The worker may have created the issue but failed to
+                        // attach the screenshot (soft-fail with
+                        // attachmentFailed = true). Surface that so the user
+                        // knows the diagnostic screenshot was not attached.
+                        Text(
+                            if (submitState.issue.attachmentFailed) {
+                                S("feedback_submitted_attachment_failed")
+                            } else {
+                                S("feedback_submitted")
+                            } + " (#${submitState.issue.number})",
+                            color = if (submitState.issue.attachmentFailed)
+                                MaterialTheme.colorScheme.error else
+                                MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     else -> {}
                 }
             }
@@ -236,7 +248,10 @@ fun ReportProblemDialog(
                 TextButton(onClick = onDismiss) { Text(S("settings_done")) }
             } else {
                 Button(
-                    onClick = { onSubmit(title, description, includeDiagnostics, name.ifBlank { null }, email.ifBlank { null }, attachmentUri) },
+                    onClick = {
+                        android.util.Log.i("FeedbackDialog", "SUBMIT_CLICKED: title='${title.take(20)}' workerConfigured=${state.workerConfigured} submitting=$submitting")
+                        onSubmit(title, description, includeDiagnostics, name.ifBlank { null }, email.ifBlank { null }, attachmentUri)
+                    },
                     enabled = !submitting && state.workerConfigured &&
                         title.isNotBlank() && description.isNotBlank(),
                 ) {
@@ -389,8 +404,14 @@ fun IssueDetailsDialog(
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             is FeedbackViewModel.ReplyState.Success -> Text(
-                                rs.message,
-                                color = MaterialTheme.colorScheme.primary,
+                                if (rs.attachmentFailed) {
+                                    S("feedback_reply_attachment_failed")
+                                } else {
+                                    rs.message
+                                },
+                                color = if (rs.attachmentFailed)
+                                    MaterialTheme.colorScheme.error else
+                                    MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             else -> {}

@@ -98,13 +98,28 @@ class FeedbackWorkerApi(
     }
 
     suspend fun getIssue(number: Int): FeedbackIssue {
-        val response = execute { client.get("api/issues/$number") }
+        val response = execute {
+            client.get("api/issues/$number") {
+                // The worker requires the shared API key on every /api route
+                // (GETs included) when FEEDBACK_WORKER_API_KEY is set; without
+                // it the deployed worker returns 401 and users can't read
+                // reports or reach the reply UI. Writes already send it via
+                // writeHeaders for idempotency.
+                contentType(io.ktor.http.ContentType.Application.Json)
+                writeHeaders(null)
+            }
+        }
         errorOrThrow(response)
         return json.decodeFromString(response.body())
     }
 
     suspend fun getComments(number: Int): List<FeedbackComment> {
-        val response = execute { client.get("api/issues/$number/comments") }
+        val response = execute {
+            client.get("api/issues/$number/comments") {
+                contentType(io.ktor.http.ContentType.Application.Json)
+                writeHeaders(null)
+            }
+        }
         errorOrThrow(response)
         return json.decodeFromString(response.body())
     }

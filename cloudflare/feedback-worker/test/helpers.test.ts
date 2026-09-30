@@ -14,8 +14,14 @@ import {
   normalizeIssue,
   sanitizeFilename,
 } from "../src/github";
-import { buildAssetPath, isSupportedImageContent, validateAssetRequest } from "../src/assets";
+import {
+  buildAssetPath,
+  isSupportedImageContent,
+  isValidVp8Vp8lBitstream,
+  validateAssetRequest,
+} from "../src/assets";
 import { describe, expect, it } from "vitest";
+
 
 describe("isFeedbackIssue guard", () => {
   it("accepts issues titled with the feedback marker namespace", () => {
@@ -202,11 +208,14 @@ describe("asset upload validation", () => {
   ];
   const jpegHeaderB64 = b64(jpegBytes);
   // Structurally valid minimal WebP: RIFF/WEBP + a bare VP8 (lossy) chunk
-  // (declared sizes consistent: 30 total bytes -> RIFF size 22; VP8 chunk size
-  // 10 matches its 10 data bytes). VP8X containers are rejected by the worker.
+  // whose data begins with a real 1x1 VP8 keyframe tag (0x9d 0x01 + 1x1
+  // dimensions) so the bitstream-content check passes too. Declared sizes
+  // are consistent: VP8 chunk payload = 10 bytes (6-byte frame header +
+  // 4 trailing zeros), RIFF size = 22 (12-byte file header + 18-byte chunk).
   const webpBytes: number[] = [
     0x52, 0x49, 0x46, 0x46, ...u32le(22), 0x57, 0x45, 0x42, 0x50,
-    0x56, 0x50, 0x38, 0x20, ...u32le(10), 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x56, 0x50, 0x38, 0x20, ...u32le(10),
+    0x9d, 0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
   ];
   const webpHeaderB64 = b64(webpBytes);
   // Plain UTF-8 text — the attack payload class: valid base64, real bytes,
@@ -354,6 +363,38 @@ describe("asset upload validation", () => {
       0xff, 0xd9,
     ]);
     expect(await validateAssetRequest("smug3.jpg", jpegWithApp1)).toBeNull();
+  });
+
+  it("accepts a real VP8 keyframe bitstream even without a PNG/JPEG header", () => {
+    // A minimal valid VP8 (lossy) keyframe: 0x9d 0x01 + width(2) + height(2).
+    // 1x1 keyframe: 0x9d 0x01 0x01 0x00 0x01 0x00.
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x9d, 0x01, 0x01, 0x00, 0x01, 0x00]))).toBe(true);
+
+    // A VP8L (lossless) image header: 0x2f 0x78 0xda + width(2) + height(2).
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x2f, 0x78, 0xda, 0x02, 0x00, 0x02, 0x00]))).toBe(true); // 2x2
+
+    // A larger valid VP8 keyframe (16x16): 0x9d 0x01 0x10 0x00 0x10 0x00.
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x9d, 0x01, 0x10, 0x00, 0x10, 0x00]))).toBe(true);
+  });
+
+  it("rejects VP8/VP8L chunks stuffed with arbitrary bytes", () => {
+    // A "VP8 " chunk containing arbitrary data (no valid frame tag).
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))).toBe(false);
+
+    // A "VP8L" chunk containing arbitrary data.
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]))).toBe(false);
+
+    // A VP8 chunk that is too small to contain a frame header.
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x9d, 0x01, 0x01]))).toBe(false);
+
+    // A VP8L chunk too small.
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x2f, 0x78, 0xda, 0x01]))).toBe(false);
+
+    // Zero-dimension VP8 keyframe (invalid).
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x9d, 0x01, 0x00, 0x00, 0x00, 0x00]))).toBe(false);
+
+    // Zero-dimension VP8L.
+    expect(isValidVp8Vp8lBitstream(new Uint8Array([0x2f, 0x78, 0xda, 0x00, 0x00, 0x00, 0x00]))).toBe(false);
   });
 
   it("rejects WebP containers with VP8X or metadata chunks", async () => {
