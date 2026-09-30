@@ -150,21 +150,66 @@ describe("asset upload validation", () => {
   // Helpers to build base64 fixtures from raw bytes (node + workers both ship btoa).
   const b64 = (bytes: number[]) => btoa(String.fromCharCode(...bytes));
   const bytesOf = (base64: string) => Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const u16 = (v: number) => [(v >> 8) & 0xff, v & 0xff];
+  const u32be = (v: number) => [
+    (v >>> 24) & 0xff,
+    (v >>> 16) & 0xff,
+    (v >>> 8) & 0xff,
+    v & 0xff,
+  ];
+  const u32le = (v: number) => [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff];
 
-  // Real 1x1 PNG (signature + IHDR + IDAT + IEND).
+  const PNG_SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+  // CRC32 (zlib), needed to assemble well-formed PNG chunks.
+  const crcTable: number[] = [];
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    crcTable[n] = c >>> 0;
+  }
+  const crc32 = (bytes: number[]) => {
+    let crc = 0xffffffff;
+    for (const b of bytes) crc = crcTable[(crc ^ b) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+  const pngChunk = (type: string, data: number[]) => {
+    const body = [...type.split("").map((c) => c.charCodeAt(0)), ...data];
+    return [...u32be(data.length), ...body, ...u32be(crc32(body))];
+  };
+
+  // Complete, structurally valid 1x1 PNG: IHDR + IDAT + IEND (real-world bytes).
   const tinyPngB64 =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-  // Minimal header-shaped JPEG (FF D8 FF E0 + JFIF APP0 marker bytes).
-  const jpegHeaderB64 = b64([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
-  // RIFF....WEBP container header with a VP8 chunk marker.
-  const webpHeaderB64 = b64([
-    0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
-  ]);
+  // Structurally complete JPEG: SOI + APP0(JFIF) + DQT + DHT + SOF0 + SOS +
+  // entropy data + EOI, with every segment length matching its payload.
+  const jpegBytes: number[] = [
+    0xff, 0xd8, // SOI
+    // APP0/JFIF: 14 payload bytes, declared length 16.
+    0xff, 0xe0, ...u16(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+    // DQT: 64 payload bytes, declared length 66.
+    0xff, 0xdb, ...u16(66), ...Array.from({ length: 64 }, (_, i) => i),
+    // DHT: 1 + 16 + 1 = 18 payload bytes, declared length 20.
+    0xff, 0xc4, ...u16(20), 0x00, ...Array.from({ length: 16 }, (_, i) => (i === 0 ? 1 : 0)), 0x01,
+    // SOF0: precision + height + width + 1 component block = 9 payload bytes, length 11.
+    0xff, 0xc0, ...u16(11), 0x08, ...u16(1), ...u16(1), 0x01, 0x01, 0x11, 0x00,
+    // SOS: 6 payload bytes, declared length 8, then 2 bytes of entropy data.
+    0xff, 0xda, ...u16(8), 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00, 0xfc, 0xaa,
+    0xff, 0xd9, // EOI
+  ];
+  const jpegHeaderB64 = b64(jpegBytes);
+  // Structurally valid WebP: RIFF/WEBP + VP8X chunk (declared sizes consistent:
+  // 30 total bytes -> RIFF size 22; VP8X chunk size 10 matches its 10 data bytes).
+  const webpBytes: number[] = [
+    0x52, 0x49, 0x46, 0x46, ...u32le(22), 0x57, 0x45, 0x42, 0x50,
+    0x56, 0x50, 0x38, 0x58, ...u32le(10), 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+  ];
+  const webpHeaderB64 = b64(webpBytes);
   // Plain UTF-8 text — the attack payload class: valid base64, real bytes,
   // but not an image at all.
   const textB64 = b64(Array.from("#!/bin/sh\nrm -rf /\n", (c) => c.charCodeAt(0)));
 
-  it("accepts uploads whose bytes match the claimed format", () => {
+  it("accepts structurally complete uploads whose format matches the extension", () => {
     for (const [name, payload] of [
       ["issue-20260929-101010-a1b2c3.png", tinyPngB64],
       ["comment-1-20260929-101010-a1b2c3.jpg", jpegHeaderB64],
@@ -175,6 +220,40 @@ describe("asset upload validation", () => {
       expect(parsed).not.toBeNull();
       expect(parsed!.safeFilename).toBe(name);
     }
+  });
+
+  it("rejects header-prefix attacks: magic bytes followed by arbitrary data", () => {
+    // The exact class Codex flagged: a real-looking header prepended to junk.
+    const jpegPrefixPlusJunk = b64([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+      ...Array.from("#!/bin/sh\nrm -rf /", (c) => c.charCodeAt(0)),
+    ]);
+    expect(validateAssetRequest("evil.jpg", jpegPrefixPlusJunk)).toBeNull();
+    // PNG signature + one garbage chunk with a bogus CRC.
+    const pngSigPlusJunk = b64([...PNG_SIG, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, ...Array(10).fill(0x41), 0xde, 0xad, 0xbe, 0xef]);
+    expect(validateAssetRequest("evil.png", pngSigPlusJunk)).toBeNull();
+    // Truncated PNG (no IEND).
+    const truncatedPng = b64([
+      ...PNG_SIG,
+      ...pngChunk("IHDR", [...u32be(1), ...u32be(1), 8, 2, 0, 0, 0]),
+    ]);
+    expect(validateAssetRequest("cut.png", truncatedPng)).toBeNull();
+    // PNG with a corrupted CRC.
+    const corruptedCrc = b64([
+      ...PNG_SIG,
+      ...pngChunk("IHDR", [...u32be(1), ...u32be(1), 8, 2, 0, 0, 0]).slice(0, -4),
+      ...u32be(0xdeadbeef),
+      ...pngChunk("IEND", []),
+    ]);
+    expect(validateAssetRequest("crc.png", corruptedCrc)).toBeNull();
+    // Trailing garbage after IEND.
+    const trailingJunk = b64([
+      ...PNG_SIG,
+      ...pngChunk("IHDR", [...u32be(1), ...u32be(1), 8, 2, 0, 0, 0]),
+      ...pngChunk("IEND", []),
+      0x41, 0x41, 0x41, 0x41,
+    ]);
+    expect(validateAssetRequest("tail.png", trailingJunk)).toBeNull();
   });
 
   it("rejects non-image bytes regardless of the file extension", () => {
@@ -189,14 +268,14 @@ describe("asset upload validation", () => {
     expect(validateAssetRequest("photo.webp", tinyPngB64)).toBeNull();
   });
 
-  it("rejects payloads too short to contain an image signature", () => {
+  it("rejects payloads too short to contain an image structure", () => {
     const oneByte = b64([0x89]);
     const riffOnly = b64([0x52, 0x49, 0x46, 0x46]);
     expect(validateAssetRequest("a.png", oneByte)).toBeNull();
-    expect(validateAssetRequest("a.webp", riffOnly)).toBeNull(); // missing WEBP at offset 8
+    expect(validateAssetRequest("a.webp", riffOnly)).toBeNull();
   });
 
-  it("isSupportedImageContent classifies headers", () => {
+  it("isSupportedImageContent classifies structurally complete images", () => {
     expect(isSupportedImageContent(bytesOf(tinyPngB64))).toBe("png");
     expect(isSupportedImageContent(bytesOf(jpegHeaderB64))).toBe("jpeg");
     expect(isSupportedImageContent(bytesOf(webpHeaderB64))).toBe("webp");

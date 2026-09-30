@@ -350,7 +350,13 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
                     if (bugReports.isNotEmpty()) {
                         Text(S("feedback_reports_heading"), style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(4.dp))
-                        BugReportList(reports = bugReports, onOpenReport = { report -> selectedReport = report })
+                        BugReportList(reports = bugReports, onOpenReport = { report ->
+                            selectedReport = report
+                            // The row click owns the initial load; the dialog
+                            // itself never self-loads on composition, so the
+                            // details can only ever be fetched once per open.
+                            feedbackViewModel.refreshIssueDetails(report.number)
+                        })
                     }
                 }
             }

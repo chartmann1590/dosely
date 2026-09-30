@@ -178,13 +178,58 @@ export function errorResponse(message: string, status: number): Response {
   return jsonResponse({ error: message }, status);
 }
 
-/** Fetches and JSON-parses a request body, guarding against malformed input. */
-export async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
+/**
+ * Hard caps on request body size. Bodies are read with a bounded stream and
+ * cut off at the limit BEFORE parsing, so a caller cannot make the isolate
+ * buffer and parse a near-platform-limit payload just to receive an error.
+ * (Asset uploads legitimately carry ~11 MB of base64, so that route gets its
+ * own larger cap; the JSON routes never need more than a few hundred KB.)
+ */
+export const MAX_JSON_BODY_BYTES = 256 * 1024; // 256 KB
+export const MAX_ASSET_BODY_BYTES = 12 * 1024 * 1024; // ~11.7 MB base64 for 8 MB images
+
+export type ReadBodyResult =
+  | { ok: true; body: Record<string, unknown> }
+  | { ok: false; status: 400 | 413 };
+
+/**
+ * Fetches and JSON-parses a request body with an enforced size limit. The
+ * stream is consumed in chunks and aborted as soon as the cap is exceeded;
+ * Content-Length is used as a fast-path rejection before reading at all.
+ */
+export async function readJsonBody(request: Request, maxBytes: number): Promise<ReadBodyResult> {
   const contentType = request.headers.get("Content-Type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json")) return null;
+  if (!contentType.toLowerCase().includes("application/json")) return { ok: false, status: 400 };
+
+  const contentLength = Number(request.headers.get("Content-Length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) return { ok: false, status: 413 };
+
   try {
-    return asRecord(await request.json());
+    const reader = request.body?.getReader();
+    if (!reader) return { ok: false, status: 400 };
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > maxBytes) {
+        void reader.cancel().catch(() => {});
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+    const merged = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const parsed = JSON.parse(new TextDecoder().decode(merged));
+    const body = asRecord(parsed);
+    if (body === null) return { ok: false, status: 400 };
+    return { ok: true, body };
   } catch {
-    return null;
+    return { ok: false, status: 400 };
   }
 }

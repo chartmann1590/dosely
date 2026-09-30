@@ -10,9 +10,11 @@ import {
   normalizeIssue,
   readJsonBody,
   asRecord,
+  MAX_ASSET_BODY_BYTES,
   MAX_BASE64_BYTES,
   MAX_COMMENT_BODY_BYTES,
   MAX_ISSUE_BODY_BYTES,
+  MAX_JSON_BODY_BYTES,
   MAX_TITLE_LENGTH,
   type NormalizedComment,
   type NormalizedIssue,
@@ -43,16 +45,27 @@ import { GitHubApiError, githubRequest } from "./githubApi";
  * serialized, or returned to any client.
  */
 
-// Hard cap on comment pagination as a safety net.
+// Comment pagination: hard caps on both pages and total comments, so a
+// malicious huge issue can never drive unbounded authenticated GitHub calls
+// or let a single response balloon (each normalized comment is ~a few KB).
 const MAX_COMMENT_PAGES = 10;
-
-// Rough abuse-protection ceiling on decoded issue-body size.
-const MAX_REQUEST_BODY_BYTES = 256 * 1024;
+const MAX_TOTAL_COMMENTS = 1000;
+const COMMENTS_PER_PAGE = 100;
 
 /** Sliding-window in-memory rate limiter (per-isolate, best effort). */
 const RATE_LIMIT_MAX = 30;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const rateBuckets = new Map<string, number[]>();
+
+/**
+ * Read routes are cheap for the client but expensive for the token: each
+ * GET fans out to 1..MAX_COMMENT_PAGES authenticated GitHub calls. A lower
+ * per-IP cap on reads stops a client from draining the token's GitHub API
+ * quota by hammering the comments endpoint.
+ */
+const READ_RATE_LIMIT_MAX = 60;
+const READ_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const readRateBuckets = new Map<string, number[]>();
 
 function isRateLimited(key: string, now: number): boolean {
   const windowStart = now - RATE_LIMIT_WINDOW_MS;
@@ -60,6 +73,15 @@ function isRateLimited(key: string, now: number): boolean {
   if (hits.length >= RATE_LIMIT_MAX) return true;
   hits.push(now);
   rateBuckets.set(key, hits);
+  return false;
+}
+
+function isReadRateLimited(key: string, now: number): boolean {
+  const windowStart = now - READ_RATE_LIMIT_WINDOW_MS;
+  const hits = (readRateBuckets.get(key) ?? []).filter((t) => t > windowStart);
+  if (hits.length >= READ_RATE_LIMIT_MAX) return true;
+  hits.push(now);
+  readRateBuckets.set(key, hits);
   return false;
 }
 
@@ -102,10 +124,11 @@ async function handleGetIssue(env: Env, number: number): Promise<Response> {
 }
 
 async function handleCreateIssue(env: Env, request: Request): Promise<Response> {
-  const body = await readJsonBody(request);
-  if (body === null) {
-    return errorResponse("Invalid request.", 400);
+  const parsed = await readJsonBody(request, MAX_JSON_BODY_BYTES);
+  if (!parsed.ok) {
+    return errorResponse(parsed.status === 413 ? "Request too large." : "Invalid request.", parsed.status);
   }
+  const body = parsed.body;
 
   const title = body.title;
   const issueBody = body.body;
@@ -135,22 +158,31 @@ async function handleGetComments(env: Env, number: number): Promise<Response> {
       return errorResponse("Not found.", 404);
     }
 
-    // Page through ALL comments (GitHub default page is 30) so older replies
-    // are never hidden and newly posted comments always appear after refresh.
-    const perPage = 100;
+    // Page through comments up to hard caps on BOTH pages and total count.
+    // The page cap alone is not a real bound: an issue serving 100 comments
+    // per page would keep issuing authenticated GitHub calls until the page
+    // cap, and a repeated caller could drain the token's API quota. Stopping
+    // at MAX_TOTAL_COMMENTS bounds both the fan-out and the response size.
     let page = 1;
     const comments: NormalizedComment[] = [];
+    let truncated = false;
     for (;;) {
       const res = await githubRequest(
         env,
-        githubPath(env, `/issues/${number}/comments?per_page=${perPage}&page=${page}`),
+        githubPath(env, `/issues/${number}/comments?per_page=${COMMENTS_PER_PAGE}&page=${page}`),
         { method: "GET" },
       );
       const raw = (await res.json()) as unknown[];
-      for (const c of raw) comments.push(normalizeComment(asRecord(c) ?? {}));
-      if (raw.length < perPage) break;
+      for (const c of raw) {
+        comments.push(normalizeComment(asRecord(c) ?? {}));
+        if (comments.length >= MAX_TOTAL_COMMENTS) {
+          truncated = true;
+          break;
+        }
+      }
+      if (truncated || raw.length < COMMENTS_PER_PAGE) break;
       page += 1;
-      if (page > MAX_COMMENT_PAGES) break; // hard safety cap
+      if (page > MAX_COMMENT_PAGES) break; // 10 pages x 100 = hard ceiling
     }
     return jsonResponse(comments);
   } catch (error) {
@@ -159,10 +191,11 @@ async function handleGetComments(env: Env, number: number): Promise<Response> {
 }
 
 async function handlePostComment(env: Env, number: number, request: Request): Promise<Response> {
-  const body = await readJsonBody(request);
-  if (body === null) {
-    return errorResponse("Invalid request.", 400);
+  const parsed = await readJsonBody(request, MAX_JSON_BODY_BYTES);
+  if (!parsed.ok) {
+    return errorResponse(parsed.status === 413 ? "Request too large." : "Invalid request.", parsed.status);
   }
+  const body = parsed.body;
   const commentBody = body.body;
   if (typeof commentBody !== "string" || commentBody.trim().length === 0 || byteLength(commentBody) > MAX_COMMENT_BODY_BYTES) {
     return errorResponse("Invalid request.", 400);
@@ -188,17 +221,18 @@ async function handlePostComment(env: Env, number: number, request: Request): Pr
 }
 
 async function handleUploadAsset(env: Env, request: Request): Promise<Response> {
-  const body = await readJsonBody(request);
-  if (body === null) {
-    return errorResponse("Invalid request.", 400);
+  const parsed = await readJsonBody(request, MAX_ASSET_BODY_BYTES);
+  if (!parsed.ok) {
+    return errorResponse(parsed.status === 413 ? "Request too large." : "Invalid request.", parsed.status);
   }
+  const body = parsed.body;
 
-  const parsed = validateAssetRequest(body.fileName, body.contentBase64);
-  if (parsed === null) {
+  const asset = validateAssetRequest(body.fileName, body.contentBase64);
+  if (asset === null) {
     return errorResponse("Invalid request.", 400);
   }
   const { safeFilename, contentBase64 } = {
-    safeFilename: parsed.safeFilename,
+    safeFilename: asset.safeFilename,
     contentBase64: body.contentBase64 as string,
   };
   if (byteLength(contentBase64) > MAX_BASE64_BYTES) {
@@ -252,7 +286,14 @@ export default {
       return errorResponse("Feedback service is not configured.", 503);
     }
 
-    // Best-effort rate limiting on state-changing routes.
+    // Best-effort rate limiting: stricter per-IP budget on reads (each
+    // comments GET can fan out to multiple authenticated GitHub calls) and
+    // the existing budget on writes.
+    if (method === "GET") {
+      if (isReadRateLimited(clientKey(request), Date.now())) {
+        return errorResponse("Too many requests.", 429);
+      }
+    }
     if (method === "POST") {
       if (isRateLimited(clientKey(request), Date.now())) {
         return errorResponse("Too many requests.", 429);

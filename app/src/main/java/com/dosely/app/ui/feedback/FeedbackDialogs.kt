@@ -280,7 +280,10 @@ fun IssueDetailsDialog(
         attachmentUri = uri
     }
 
-    LaunchedEffect(report.number) { onRefresh() }
+    // No self-load on composition: the caller (SettingsScreen row click)
+    // issues the initial load BEFORE this dialog opens, so two concurrent
+    // detail fetches can never race; onRefresh is only invoked explicitly
+    // (e.g. the Retry button after an error).
 
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -18,6 +18,9 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -81,6 +84,9 @@ class FeedbackViewModel(
 
     private val _detailsState = MutableStateFlow(DetailsUiState())
     val detailsState: StateFlow<DetailsUiState> = _detailsState
+
+    /** Most recent issue-details load; cancelled when a newer one starts. */
+    private var detailsLoadJob: Job? = null
 
     val bugReports: StateFlow<List<BugReport>> = bugReportRepo.bugReports
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -210,18 +216,38 @@ class FeedbackViewModel(
     /**
      * Loads (or refreshes) the issue + comments.
      *
-     * Note: this resets [DetailsUiState.replyState] to Idle. Callers that must
-     * not lose a pending reply outcome (see [submitReply]) clear the draft via
-     * their success callback BEFORE refreshing, because back-to-back writes to
-     * a StateFlow conflate and the UI would never observe the intermediate
-     * Success state.
+     * Guarantees (each one fixed a real review finding):
+     *  - A reply in [ReplyState.Submitting] is never reset by a refresh, so
+     *    the in-flight guard in [submitReply] cannot be bypassed into a
+     *    duplicate post while an upload or POST is still running.
+     *  - Only the most recent load publishes: a slower response for an
+     *    earlier issue can never overwrite the state of the issue the user is
+     *    actually viewing (previous loads are cancelled via [detailsLoadJob]).
+     *  - Callers that must not lose a pending reply outcome (see
+     *    [submitReply]) clear the draft via their success callback BEFORE
+     *    refreshing, because back-to-back writes to a StateFlow conflate and
+     *    the UI would never observe the intermediate Success state.
      */
     fun loadIssueDetails(number: Int) {
-        _detailsState.value = DetailsUiState(loading = true)
-        viewModelScope.launch {
+        val sameIssue = _detailsState.value.issue?.number == number
+        _detailsState.value = if (sameIssue) {
+            // Same issue: keep everything (including an in-flight reply state)
+            // and just show the spinner while comments refresh.
+            _detailsState.value.copy(loading = true)
+        } else {
+            // Switching issues: full reset (reply state must not leak across).
+            DetailsUiState(loading = true)
+        }
+        detailsLoadJob?.cancel()
+        detailsLoadJob = viewModelScope.launch {
             try {
                 val issue = api.getIssue(number)
                 val comments = api.getComments(number)
+                // Stale-response guard: a newer load (this one was cancelled
+                // when it started) must never publish — otherwise issue A's
+                // body/comments could render under issue B's title while its
+                // reply action still posts to B.
+                coroutineContext.ensureActive()
                 // Sync local cached status with GitHub state.
                 bugReportRepo.saveBugReport(
                     BugReport(
@@ -238,6 +264,8 @@ class FeedbackViewModel(
                     comments = comments,
                     error = null,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: FeedbackWorkerApi.ApiException) {
                 _detailsState.value = _detailsState.value.copy(
                     loading = false,
