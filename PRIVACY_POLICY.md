@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: September 29, 2026**
+**Last updated: September 30, 2026**
 
 This Privacy Policy describes how the Dosely Android application (the "App") handles
 your information. It is provided by Charles Hartmann ("we", "us").
@@ -33,10 +33,50 @@ through Google's User Messaging Platform before serving personalized ads. You ca
 change your choices anytime under **Settings → Privacy options**, or opt out of ads
 personalization in Android **Settings → Privacy → Ads**.
 
+## Feedback reports (Support & Feedback)
+
+The App's "Report a Problem" feature lets you send bug reports to our GitHub
+issue tracker (`github.com/chartmann1590/dosely`). When you submit a report,
+the following information is transmitted to and stored in that repository:
+
+- **Report content**: the title and description you type, plus your name and
+  email address **only if you voluntarily enter them** (both fields are
+  optional).
+- **Optional diagnostics** (on by default; you can disable the toggle in the
+  report form): app version, device model and manufacturer, Android version,
+  locale, time zone, free/total storage and memory, and a timestamp. No
+  contacts, location, credentials, files, or health data are ever included.
+- **Optional screenshot**: if you attach one, it is re-encoded on your device
+  (stripping EXIF metadata) and stored in the repository as an image
+  attachment.
+
+Reports are transmitted through our Cloudflare Worker proxy, which adds
+authentication and does not store report data. The recipient is the Dosely
+GitHub repository owned by Charles Hartmann.
+
+**Visibility**: if the repository is public, your report — including any name,
+email, screenshot, and diagnostics — is publicly visible. The report form
+warns you about this before submission. Please do not include personal,
+medical, or other sensitive information in reports.
+
+**Retention and deletion**: reports are kept in the issue tracker until we
+delete them. You may request deletion of a report (including attached
+screenshots and any personal information) by contacting the developer. Note
+that image attachments can remain in the repository's git history after
+deletion unless the history is rewritten.
+
 ## Data safety summary (Google Play)
 
 - **Health data (injections, weight)**: collected? No. Shared? No. Stored on device only.
-- **Personal info**: collected? No.
+- **Personal info (name, email)**: collected? Yes — only if you type them into
+  the optional feedback form. Shared with GitHub as part of the report.
+  Encrypted in transit: yes. Deletion: request removal from the issue tracker.
+- **App info and performance (feedback diagnostics)**: collected? Yes — only
+  when you submit a feedback report with the diagnostics toggle enabled.
+  Shared with GitHub as part of the report. Deletion: request removal.
+- **Photos (feedback screenshots)**: collected? Only images you explicitly
+  attach to a feedback report. Shared with GitHub as part of the report.
+  Deletion: request removal.
 - **Device/other IDs (advertising ID)**: collected by the ad provider when ads are
   shown. Shared with Google for ad serving. Encrypted in transit: yes. Deletion:
   remove ads data via Android ad settings or uninstall.

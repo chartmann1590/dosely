@@ -6,14 +6,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dosely.app.data.feedback.BugReport
 import com.dosely.app.data.feedback.BugReportRepo
-import com.dosely.app.data.feedback.CreateIssueRequest
+import com.dosely.app.data.feedback.CreateIssueWithAssetRequest
 import com.dosely.app.data.feedback.DiagnosticsHelper
 import com.dosely.app.data.feedback.FeedbackComment
 import com.dosely.app.data.feedback.FeedbackIssue
 import com.dosely.app.data.feedback.FeedbackWorkerApi
 import com.dosely.app.data.feedback.ImageHelper
 import com.dosely.app.data.feedback.ImageAttachmentException
-import com.dosely.app.data.feedback.PostCommentRequest
+import com.dosely.app.data.feedback.PostCommentWithAssetRequest
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -136,17 +136,11 @@ class FeedbackViewModel(
         _reportState.value = _reportState.value.copy(submitState = SubmitState.UploadingAttachment())
         viewModelScope.launch {
             try {
-                val attachmentMarkdown = attachmentUri?.let { uri ->
-                    val upload = withContext(Dispatchers.IO) {
-                        val base64 = ImageHelper.uriToBase64(appContext, uri)
-                        api.uploadAsset(generateAttachmentFileName("issue"), base64)
-                    }
-                    buildString {
-                        appendLine()
-                        appendLine("## Attachment")
-                        appendLine()
-                        appendLine("![Screenshot](${upload.downloadUrl ?: ""})")
-                    }
+                // Read/encode the image locally only; the upload happens
+                // worker-side as part of the issue-creation operation, so a
+                // failed submission can never orphan an uploaded screenshot.
+                val attachmentBase64 = attachmentUri?.let { uri ->
+                    withContext(Dispatchers.IO) { ImageHelper.uriToBase64(appContext, uri) }
                 }
 
                 val body = buildString {
@@ -158,7 +152,6 @@ class FeedbackViewModel(
                     appendLine()
                     appendLine("- Name: ${name?.trim()?.takeIf { it.isNotEmpty() } ?: "Not provided"}")
                     appendLine("- Email: ${email?.trim()?.takeIf { it.isNotEmpty() } ?: "Not provided"}")
-                    if (attachmentMarkdown != null) append(attachmentMarkdown)
                     if (includeDiagnostics) {
                         appendLine()
                         append(DiagnosticsHelper.collect(appContext))
@@ -166,10 +159,12 @@ class FeedbackViewModel(
                 }
 
                 _reportState.value = _reportState.value.copy(submitState = SubmitState.Submitting)
-                val issue = api.createIssue(
-                    CreateIssueRequest(
+                val issue = api.createIssueWithAsset(
+                    CreateIssueWithAssetRequest(
                         title = "[Feedback] ${title.trim()}",
                         body = body,
+                        attachmentFileName = attachmentBase64?.let { generateAttachmentFileName("issue") },
+                        attachmentContentBase64 = attachmentBase64,
                     ),
                 )
 
@@ -299,29 +294,26 @@ class FeedbackViewModel(
         viewModelScope.launch {
             _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Submitting)
             try {
-                // If an attachment was requested but its upload fails, the exception
-                // below prevents a silent attachment-less post; the user can retry.
-                val attachmentMarkdown = attachmentUri?.let { uri ->
-                    val upload = withContext(Dispatchers.IO) {
-                        val base64 = ImageHelper.uriToBase64(appContext, uri)
-                        api.uploadAsset(generateAttachmentFileName("comment-$issueNumber"), base64)
-                    }
-                    buildString {
-                        appendLine()
-                        appendLine("## Attachment")
-                        appendLine()
-                        appendLine("![Screenshot](${upload.downloadUrl ?: ""})")
-                    }
+                // The attachment is uploaded worker-side as part of the comment
+                // operation, so a failure can never orphan an uploaded file.
+                val attachmentBase64 = attachmentUri?.let { uri ->
+                    withContext(Dispatchers.IO) { ImageHelper.uriToBase64(appContext, uri) }
                 }
 
                 val commentBody = buildString {
                     appendLine("## Reply")
                     appendLine()
                     appendLine(replyText.trim())
-                    if (attachmentMarkdown != null) append(attachmentMarkdown)
                 }
 
-                api.postComment(issueNumber, PostCommentRequest(commentBody))
+                api.postCommentWithAsset(
+                    issueNumber,
+                    PostCommentWithAssetRequest(
+                        body = commentBody,
+                        attachmentFileName = attachmentBase64?.let { generateAttachmentFileName("comment-$issueNumber") },
+                        attachmentContentBase64 = attachmentBase64,
+                    ),
+                )
                 _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Success("Reply posted."))
                 // Clear the draft via the success callback BEFORE refreshing:
                 // onDone runs synchronously on the main thread, so it cannot be
@@ -330,7 +322,13 @@ class FeedbackViewModel(
                 // follows swaps in the comment list with the draft already
                 // cleared, closing the accidental-duplicate-post window.
                 onDone()
-                loadIssueDetails(issueNumber)
+                // Only refresh when this issue is still the one displayed: if
+                // the user dismissed report A and opened report B meanwhile,
+                // refreshing A here would cancel B's load and replace B's
+                // state with A's data.
+                if (_detailsState.value.issue?.number == issueNumber) {
+                    loadIssueDetails(issueNumber)
+                }
             } catch (e: ImageAttachmentException) {
                 _detailsState.value = _detailsState.value.copy(
                     replyState = ReplyState.Failure("Attachment upload failed: ${e.message}"),

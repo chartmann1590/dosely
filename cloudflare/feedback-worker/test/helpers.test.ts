@@ -209,35 +209,35 @@ describe("asset upload validation", () => {
   // but not an image at all.
   const textB64 = b64(Array.from("#!/bin/sh\nrm -rf /\n", (c) => c.charCodeAt(0)));
 
-  it("accepts structurally complete uploads whose format matches the extension", () => {
+  it("accepts structurally complete uploads whose format matches the extension", async () => {
     for (const [name, payload] of [
       ["issue-20260929-101010-a1b2c3.png", tinyPngB64],
       ["comment-1-20260929-101010-a1b2c3.jpg", jpegHeaderB64],
       ["comment-1-20260929-101010-a1b2c3.jpeg", jpegHeaderB64],
       ["shot.webp", webpHeaderB64],
     ] as const) {
-      const parsed = validateAssetRequest(name, payload);
+      const parsed = await validateAssetRequest(name, payload);
       expect(parsed).not.toBeNull();
       expect(parsed!.safeFilename).toBe(name);
     }
   });
 
-  it("rejects header-prefix attacks: magic bytes followed by arbitrary data", () => {
+  it("rejects header-prefix attacks: magic bytes followed by arbitrary data", async () => {
     // The exact class Codex flagged: a real-looking header prepended to junk.
     const jpegPrefixPlusJunk = b64([
       0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
       ...Array.from("#!/bin/sh\nrm -rf /", (c) => c.charCodeAt(0)),
     ]);
-    expect(validateAssetRequest("evil.jpg", jpegPrefixPlusJunk)).toBeNull();
+    expect(await validateAssetRequest("evil.jpg", jpegPrefixPlusJunk)).toBeNull();
     // PNG signature + one garbage chunk with a bogus CRC.
     const pngSigPlusJunk = b64([...PNG_SIG, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, ...Array(10).fill(0x41), 0xde, 0xad, 0xbe, 0xef]);
-    expect(validateAssetRequest("evil.png", pngSigPlusJunk)).toBeNull();
+    expect(await validateAssetRequest("evil.png", pngSigPlusJunk)).toBeNull();
     // Truncated PNG (no IEND).
     const truncatedPng = b64([
       ...PNG_SIG,
       ...pngChunk("IHDR", [...u32be(1), ...u32be(1), 8, 2, 0, 0, 0]),
     ]);
-    expect(validateAssetRequest("cut.png", truncatedPng)).toBeNull();
+    expect(await validateAssetRequest("cut.png", truncatedPng)).toBeNull();
     // PNG with a corrupted CRC.
     const corruptedCrc = b64([
       ...PNG_SIG,
@@ -245,7 +245,7 @@ describe("asset upload validation", () => {
       ...u32be(0xdeadbeef),
       ...pngChunk("IEND", []),
     ]);
-    expect(validateAssetRequest("crc.png", corruptedCrc)).toBeNull();
+    expect(await validateAssetRequest("crc.png", corruptedCrc)).toBeNull();
     // Trailing garbage after IEND.
     const trailingJunk = b64([
       ...PNG_SIG,
@@ -253,29 +253,29 @@ describe("asset upload validation", () => {
       ...pngChunk("IEND", []),
       0x41, 0x41, 0x41, 0x41,
     ]);
-    expect(validateAssetRequest("tail.png", trailingJunk)).toBeNull();
+    expect(await validateAssetRequest("tail.png", trailingJunk)).toBeNull();
   });
 
-  it("rejects non-image bytes regardless of the file extension", () => {
-    expect(validateAssetRequest("payload.png", textB64)).toBeNull();
-    expect(validateAssetRequest("payload.jpg", textB64)).toBeNull();
-    expect(validateAssetRequest("payload.webp", textB64)).toBeNull();
+  it("rejects non-image bytes regardless of the file extension", async () => {
+    expect(await validateAssetRequest("payload.png", textB64)).toBeNull();
+    expect(await validateAssetRequest("payload.jpg", textB64)).toBeNull();
+    expect(await validateAssetRequest("payload.webp", textB64)).toBeNull();
   });
 
-  it("rejects payloads whose real format disagrees with the extension", () => {
-    expect(validateAssetRequest("photo.jpg", tinyPngB64)).toBeNull();
-    expect(validateAssetRequest("photo.png", jpegHeaderB64)).toBeNull();
-    expect(validateAssetRequest("photo.webp", tinyPngB64)).toBeNull();
+  it("rejects payloads whose real format disagrees with the extension", async () => {
+    expect(await validateAssetRequest("photo.jpg", tinyPngB64)).toBeNull();
+    expect(await validateAssetRequest("photo.png", jpegHeaderB64)).toBeNull();
+    expect(await validateAssetRequest("photo.webp", tinyPngB64)).toBeNull();
   });
 
-  it("rejects payloads too short to contain an image structure", () => {
+  it("rejects payloads too short to contain an image structure", async () => {
     const oneByte = b64([0x89]);
     const riffOnly = b64([0x52, 0x49, 0x46, 0x46]);
-    expect(validateAssetRequest("a.png", oneByte)).toBeNull();
-    expect(validateAssetRequest("a.webp", riffOnly)).toBeNull();
+    expect(await validateAssetRequest("a.png", oneByte)).toBeNull();
+    expect(await validateAssetRequest("a.webp", riffOnly)).toBeNull();
   });
 
-  it("isSupportedImageContent classifies structurally complete images", () => {
+  it("isSupportedImageContent classifies structurally complete images", async () => {
     expect(isSupportedImageContent(bytesOf(tinyPngB64))).toBe("png");
     expect(isSupportedImageContent(bytesOf(jpegHeaderB64))).toBe("jpeg");
     expect(isSupportedImageContent(bytesOf(webpHeaderB64))).toBe("webp");
@@ -283,25 +283,25 @@ describe("asset upload validation", () => {
     expect(isSupportedImageContent(null)).toBeNull();
   });
 
-  it("rejects unsupported extensions", () => {
-    expect(validateAssetRequest("evil.exe", tinyPngB64)).toBeNull();
+  it("rejects unsupported extensions", async () => {
+    expect(await validateAssetRequest("evil.exe", tinyPngB64)).toBeNull();
   });
 
-  it("rejects invalid base64", () => {
-    expect(validateAssetRequest("ok.png", "!!not-base64!!")).toBeNull();
+  it("rejects invalid base64", async () => {
+    expect(await validateAssetRequest("ok.png", "!!not-base64!!")).toBeNull();
   });
 
-  it("rejects oversized payloads", () => {
+  it("rejects oversized payloads", async () => {
     const big = "A".repeat((8 * 1024 * 1024 + 1) * 4);
-    expect(validateAssetRequest("big.png", big)).toBeNull();
+    expect(await validateAssetRequest("big.png", big)).toBeNull();
   });
 
-  it("rejects payloads with malformed base64 padding in the header", () => {
+  it("rejects payloads with malformed base64 padding in the header", async () => {
     // isValidBase64 accepts this; the header decoder must not throw on it.
-    expect(validateAssetRequest("ok.png", "aGVsbG8 world")).toBeNull();
+    expect(await validateAssetRequest("ok.png", "aGVsbG8 world")).toBeNull();
   });
 
-  it("builds paths strictly under the assets dir", () => {
+  it("builds paths strictly under the assets dir", async () => {
     expect(buildAssetPath({ FEEDBACK_ASSETS_DIR: "feedback-assets" }, "x.png")).toBe(
       "feedback-assets/x.png",
     );

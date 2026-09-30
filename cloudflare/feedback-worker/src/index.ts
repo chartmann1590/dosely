@@ -227,19 +227,18 @@ async function handleUploadAsset(env: Env, request: Request): Promise<Response> 
   }
   const body = parsed.body;
 
-  const asset = validateAssetRequest(body.fileName, body.contentBase64);
+  const asset = await validateAssetRequest(body.fileName, body.contentBase64);
   if (asset === null) {
     return errorResponse("Invalid request.", 400);
   }
-  const { safeFilename, contentBase64 } = {
-    safeFilename: asset.safeFilename,
-    contentBase64: body.contentBase64 as string,
-  };
+  const safeFilename = asset.safeFilename;
+  const contentBase64 = body.contentBase64 as string;
   if (byteLength(contentBase64) > MAX_BASE64_BYTES) {
     return errorResponse("Invalid request.", 413);
   }
 
   const path = buildAssetPath(env, safeFilename);
+  let committedSha: string | null = null;
   try {
     const res = await githubRequest(env, `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`, {
       method: "PUT",
@@ -248,12 +247,189 @@ async function handleUploadAsset(env: Env, request: Request): Promise<Response> 
         content: contentBase64,
       }),
     });
+    const raw = asRecord(await res.json());
+    const content = asRecord(raw?.content ?? null);
+    const committedShaValue = content?.sha;
+    if (typeof committedShaValue === "string") committedSha = committedShaValue;
     const asset = normalizeAsset(await res.json());
     return jsonResponse(asset, 201);
   } catch (error) {
+    // Compensation: never leave an unreferenced blob in repository history.
+    if (committedSha !== null) {
+      await deleteCommittedAsset(env, path, committedSha);
+    }
     return mapGitHubError(error, "Unable to upload attachment.");
   }
 }
+
+/** Deletes a committed asset blob (best effort, used for compensation). */
+async function deleteCommittedAsset(env: Env, path: string, sha: string): Promise<void> {
+  try {
+    await githubRequest(env, `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`, {
+      method: "DELETE",
+      body: JSON.stringify({
+        message: `Remove unreferenced feedback attachment: ${path.split("/").pop()}`,
+        sha,
+      }),
+    });
+  } catch {
+    // Best effort only; the response to the failed operation is unaffected.
+  }
+}
+
+/**
+ * Creates a feedback issue and uploads its attachment as one logical
+ * operation: the image is only committed after the issue exists, and any
+ * downstream failure removes the orphaned asset.
+ */
+async function handleCreateIssueWithAsset(env: Env, request: Request): Promise<Response> {
+  const parsed = await readJsonBody(request, MAX_ASSET_BODY_BYTES);
+  if (!parsed.ok) {
+    return errorResponse(parsed.status === 413 ? "Request too large." : "Invalid request.", parsed.status);
+  }
+  const body = parsed.body;
+
+  const title = body.title;
+  const issueBody = body.body;
+  if (typeof title !== "string" || title.trim().length === 0 || title.length > MAX_TITLE_LENGTH) {
+    return errorResponse("Invalid request.", 400);
+  }
+  if (typeof issueBody !== "string" || issueBody.trim().length === 0 || byteLength(issueBody) > MAX_ISSUE_BODY_BYTES) {
+    return errorResponse("Invalid request.", 400);
+  }
+
+  const attachment = typeof body.attachmentFileName === "string" && typeof body.attachmentContentBase64 === "string"
+    ? await validateAssetRequest(body.attachmentFileName, body.attachmentContentBase64)
+    : null;
+  if (body.attachmentFileName !== undefined && attachment === null) {
+    return errorResponse("Invalid request.", 400);
+  }
+
+  const path = attachment !== null ? buildAssetPath(env, attachment.safeFilename) : null;
+  let committedSha: string | null = null;
+  try {
+    // The issue references the asset, so the issue is created FIRST. The
+    // attachment markdown is appended afterwards via PATCH on success.
+    const res = await githubRequest(env, githubPath(env, "/issues"), {
+      method: "POST",
+      body: JSON.stringify({ title, body: issueBody }),
+    });
+    const rawIssue = asRecord(await res.json());
+    const issue = normalizeIssue(rawIssue ?? {});
+
+    if (attachment !== null && path !== null) {
+      const uploadRes = await githubRequest(
+        env,
+        `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            message: `Upload feedback attachment: ${attachment.safeFilename}`,
+            content: body.attachmentContentBase64 as string,
+          }),
+        },
+      );
+      const rawContent = asRecord(await uploadRes.json());
+      const content = asRecord(rawContent?.content ?? null);
+      if (typeof content?.sha === "string") committedSha = content.sha;
+      const meta = normalizeAsset({ content: rawContent ?? null });
+
+      const url =
+        meta.downloadUrl ??
+        `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
+      const updatedBody = `${issueBody}\n\n## Attachment\n\n![Screenshot](${url})`;
+      await githubRequest(env, githubPath(env, `/issues/${issue.number}`), {
+        method: "PATCH",
+        body: JSON.stringify({ body: updatedBody }),
+      });
+    }
+    return jsonResponse(issue, 201);
+  } catch (error) {
+    // Compensation: never leave an orphaned attachment in repository history.
+    // Awaiting matters: the isolate can be frozen as soon as the response is
+    // returned, so a fire-and-forget delete would never run.
+    if (committedSha !== null && path !== null) {
+      await deleteCommittedAsset(env, path, committedSha);
+    }
+    return mapGitHubError(error, "Unable to create issue.");
+  }
+}
+
+/**
+ * Posts a comment and uploads its attachment as one logical operation,
+ * with the same issue-guard and orphan-compensation rules as the other
+ * feedback operations.
+ */
+async function handlePostCommentWithAsset(env: Env, number: number, request: Request): Promise<Response> {
+  const parsed = await readJsonBody(request, MAX_ASSET_BODY_BYTES);
+  if (!parsed.ok) {
+    return errorResponse(parsed.status === 413 ? "Request too large." : "Invalid request.", parsed.status);
+  }
+  const body = parsed.body;
+
+  const commentBody = body.body;
+  if (typeof commentBody !== "string" || commentBody.trim().length === 0 || byteLength(commentBody) > MAX_COMMENT_BODY_BYTES) {
+    return errorResponse("Invalid request.", 400);
+  }
+
+  const attachment = typeof body.attachmentFileName === "string" && typeof body.attachmentContentBase64 === "string"
+    ? await validateAssetRequest(body.attachmentFileName, body.attachmentContentBase64)
+    : null;
+  if (body.attachmentFileName !== undefined && attachment === null) {
+    return errorResponse("Invalid request.", 400);
+  }
+
+  const path = attachment !== null ? buildAssetPath(env, attachment.safeFilename) : null;
+  let committedSha: string | null = null;
+  try {
+    // Restrict writes to issues this service created.
+    const issueRes = await githubRequest(env, githubPath(env, `/issues/${number}`), { method: "GET" });
+    if (!isFeedbackIssue(asRecord(await issueRes.json()) ?? {})) {
+      return errorResponse("Not found.", 404);
+    }
+
+    const res = await githubRequest(env, githubPath(env, `/issues/${number}/comments`), {
+      method: "POST",
+      body: JSON.stringify({ body: commentBody }),
+    });
+    const comment = normalizeComment(await res.json());
+
+    if (attachment !== null && path !== null) {
+      const uploadRes = await githubRequest(
+        env,
+        `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            message: `Upload feedback attachment: ${attachment.safeFilename}`,
+            content: body.attachmentContentBase64 as string,
+          }),
+        },
+      );
+      const rawContent = asRecord(await uploadRes.json());
+      const content = asRecord(rawContent?.content ?? null);
+      if (typeof content?.sha === "string") committedSha = content.sha;
+      const meta = normalizeAsset({ content: rawContent ?? null });
+
+      const url =
+        meta.downloadUrl ??
+        `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
+      const updatedBody = `${commentBody}\n\n## Attachment\n\n![Screenshot](${url})`;
+      // Updating a comment uses the global issue-comments endpoint.
+      await githubRequest(env, githubPath(env, `/issues/comments/${comment.id}`), {
+        method: "PATCH",
+        body: JSON.stringify({ body: updatedBody }),
+      });
+    }
+    return jsonResponse(comment, 201);
+  } catch (error) {
+    if (committedSha !== null && path !== null) {
+      await deleteCommittedAsset(env, path, committedSha);
+    }
+    return mapGitHubError(error, "Unable to post comment.");
+  }
+}
+
 
 function mapGitHubError(error: unknown, fallback: string): Response {
   if (error instanceof GitHubApiError) {
@@ -305,6 +481,13 @@ export default {
       return handleCreateIssue(env, request);
     }
 
+    // Issue creation with an inline attachment: one logical operation, so a
+    // failed issue creation can never orphan an uploaded screenshot.
+    if (path === "/api/issues-with-asset") {
+      if (method !== "POST") return errorResponse("Method not allowed.", 405);
+      return handleCreateIssueWithAsset(env, request);
+    }
+
     const issueMatch = /^\/api\/issues\/(\d+)$/.exec(path);
     if (issueMatch !== null) {
       const number = Number(issueMatch[1]);
@@ -320,6 +503,16 @@ export default {
       if (method === "GET") return handleGetComments(env, number);
       if (method === "POST") return handlePostComment(env, number, request);
       return errorResponse("Method not allowed.", 405);
+    }
+
+    // Comment posting with an inline attachment: one logical operation with
+    // the same feedback-issue guard and orphan-compensation rules.
+    const commentWithAssetMatch = /^\/api\/issues\/(\d+)\/comments-with-asset$/.exec(path);
+    if (commentWithAssetMatch !== null) {
+      const number = Number(commentWithAssetMatch[1]);
+      if (!isValidIssueNumber(number)) return errorResponse("Invalid request.", 400);
+      if (method !== "POST") return errorResponse("Method not allowed.", 405);
+      return handlePostCommentWithAsset(env, number, request);
     }
 
     if (path === "/api/assets") {

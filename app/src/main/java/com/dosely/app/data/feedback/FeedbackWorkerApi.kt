@@ -114,6 +114,35 @@ class FeedbackWorkerApi(
         return json.decodeFromString(response.body())
     }
 
+    /**
+     * Creates an issue and uploads its attachment as one worker-side logical
+     * operation (pass null attachment fields for a text-only report). This
+     * replaces the client-side upload-then-create sequence so a failure can
+     * never leave an uploaded but unreferenced screenshot behind.
+     */
+    suspend fun createIssueWithAsset(request: CreateIssueWithAssetRequest): FeedbackIssue {
+        val response = execute {
+            client.post("api/issues-with-asset") {
+                contentType(io.ktor.http.ContentType.Application.Json)
+                setBody(json.encodeToString(request))
+            }
+        }
+        errorOrThrow(response)
+        return json.decodeFromString(response.body())
+    }
+
+    /** See [createIssueWithAsset]; transactional variant of [postComment]. */
+    suspend fun postCommentWithAsset(number: Int, request: PostCommentWithAssetRequest): FeedbackComment {
+        val response = execute {
+            client.post("api/issues/$number/comments-with-asset") {
+                contentType(io.ktor.http.ContentType.Application.Json)
+                setBody(json.encodeToString(request))
+            }
+        }
+        errorOrThrow(response)
+        return json.decodeFromString(response.body())
+    }
+
     suspend fun health(): Boolean {
         val response = execute { client.get("health") }
         return response.status == HttpStatusCode.OK

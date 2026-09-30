@@ -192,26 +192,49 @@ export function isCompleteJpeg(bytes: Uint8Array): boolean {
   }
 }
 
+// Chunks the WebP container spec defines. Every chunk in the file must be
+// one of these, so junk bytes cannot be dressed up as extra chunks.
+const WEBP_KNOWN_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X", "ALPH", "ANIM", "ANMF", "ICCP", "EXIF", "XMP "]);
+// Chunks that carry the actual image bitstream; the first chunk must be one.
+const WEBP_PAYLOAD_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X"]);
+
 /**
- * WebP: requires the RIFF container with a declared size that matches the
- * payload (allowing the odd-byte padding byte the spec permits), the WEBP
- * tag, and a VP8/VP8L/VP8X payload chunk whose declared size fits.
+ * WebP: requires the RIFF/WEBP container with a declared size that matches
+ * the payload (allowing the odd-byte padding byte the spec permits), then
+ * walks every chunk — FourCC, little-endian size, data, pad byte — until the
+ * exact RIFF boundary. The first chunk must be the VP8/VP8L/VP8X bitstream,
+ * VP8X is exactly 10 bytes per spec, every FourCC must be a known chunk
+ * type, and nothing may trail the container. A one-byte VP8X followed by
+ * arbitrary data therefore fails the walk.
  */
 export function isCompleteWebp(bytes: Uint8Array): boolean {
   // 12-byte RIFF/WEBP header + an 8-byte chunk header + at least 1 data byte.
   if (bytes.length < 21) return false;
-  if (asciiAt(bytes, 0) !== "RIFF") return false;
-  if (asciiAt(bytes, 8) !== "WEBP") return false;
+  if (asciiAt(bytes, 0) !== "RIFF" || asciiAt(bytes, 8) !== "WEBP") return false;
 
   const declaredSize = u32le(bytes, 4);
-  const expected = bytes.length - 8;
-  if (declaredSize !== expected && declaredSize !== expected - 1) return false;
   if (declaredSize > WEBP_MAX_FILE_BYTES) return false;
+  // "RIFF" + size + payload; the payload may carry one pad byte when its
+  // true size is odd, so the file is declaredSize+8 or declaredSize+9 bytes.
+  if (bytes.length !== declaredSize + 8 && bytes.length !== declaredSize + 9) return false;
 
-  const chunkType = asciiAt(bytes, 12);
-  if (chunkType !== "VP8 " && chunkType !== "VP8L" && chunkType !== "VP8X") return false;
-  const chunkSize = u32le(bytes, 16);
-  return chunkSize <= bytes.length - 20;
+  const riffEnd = Math.min(8 + declaredSize, bytes.length);
+  let offset = 12;
+  let sawPayloadChunk = false;
+  while (offset + 8 <= riffEnd) {
+    const fourcc = asciiAt(bytes, offset);
+    const chunkSize = u32le(bytes, offset + 4);
+    const dataEnd = offset + 8 + chunkSize;
+    if (dataEnd > riffEnd) return false;
+    if (!WEBP_KNOWN_CHUNKS.has(fourcc)) return false;
+    if (!sawPayloadChunk) {
+      if (!WEBP_PAYLOAD_CHUNKS.has(fourcc)) return false;
+      if (fourcc === "VP8X" && chunkSize !== 10) return false;
+      sawPayloadChunk = true;
+    }
+    offset = dataEnd % 2 === 1 ? dataEnd + 1 : dataEnd; // odd chunks carry a pad byte
+  }
+  return sawPayloadChunk && (offset === riffEnd || offset === riffEnd + 1);
 }
 
 /**
@@ -226,18 +249,30 @@ export function isSupportedImageContent(bytes: Uint8Array | null): ImageFormat |
   return null;
 }
 
+export interface ValidatedAsset {
+  safeFilename: string;
+  /** Decoded image size in bytes. */
+  decodedBytes: number;
+  /** Exact size of the file that will be committed. */
+  fileSize: number;
+  /** Git blob SHA-1 of the decoded content (what GitHub Contents will store). */
+  blobSha: string;
+}
+
 /**
  * Validates a client-supplied asset upload. Returns null when the payload is
- * not acceptable; returns the sanitized filename and decoded size otherwise.
+ * not acceptable; returns the sanitized filename, decoded size, exact file
+ * size, and Git blob SHA otherwise (the SHA lets callers delete the blob if a
+ * later step of a multi-step operation fails).
  *
  * Checks, in order: base64 shape, decoded size, filename sanitization,
  * extension allow-list, and finally a full structural image parse whose
  * detected format must match the claimed extension.
  */
-export function validateAssetRequest(
+export async function validateAssetRequest(
   fileName: unknown,
   contentBase64: unknown,
-): { safeFilename: string; decodedBytes: number } | null {
+): Promise<ValidatedAsset | null> {
   if (typeof fileName !== "string" || typeof contentBase64 !== "string") return null;
   if (!isValidBase64(contentBase64)) return null;
 
@@ -262,7 +297,26 @@ export function validateAssetRequest(
   // disguised with a real magic-number prefix) from being committed.
   const bytes = decodeBase64Bytes(contentBase64);
   const contentFormat = isSupportedImageContent(bytes);
-  if (contentFormat === null || !accepted.includes(contentFormat)) return null;
+  if (contentFormat === null || bytes === null || !accepted.includes(contentFormat)) return null;
 
-  return { safeFilename: sanitized, decodedBytes };
+  return {
+    safeFilename: sanitized,
+    decodedBytes,
+    fileSize: bytes.length,
+    blobSha: await gitBlobSha(bytes),
+  };
+}
+
+/**
+ * Computes the Git blob SHA-1 ("blob <len>\0" + content) that GitHub Contents
+ * will report for these bytes, so callers can address the object for deletion
+ * without a second round-trip.
+ */
+export async function gitBlobSha(bytes: Uint8Array): Promise<string> {
+  const header = new TextEncoder().encode(`blob ${bytes.length}\u0000`);
+  const merged = new Uint8Array(header.length + bytes.length);
+  merged.set(header, 0);
+  merged.set(bytes, header.length);
+  const digest = await crypto.subtle.digest("SHA-1", merged);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
