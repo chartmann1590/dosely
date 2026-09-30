@@ -251,7 +251,9 @@ async function handleUploadAsset(env: Env, request: Request): Promise<Response> 
     const content = asRecord(raw?.content ?? null);
     const committedShaValue = content?.sha;
     if (typeof committedShaValue === "string") committedSha = committedShaValue;
-    const asset = normalizeAsset(await res.json());
+    // Parse the response body only once — request.json() (and res.json())
+    // cannot be consumed twice.
+    const asset = normalizeAsset({ content: raw?.content ?? null });
     return jsonResponse(asset, 201);
   } catch (error) {
     // Compensation: never leave an unreferenced blob in repository history.
@@ -318,39 +320,47 @@ async function handleCreateIssueWithAsset(env: Env, request: Request): Promise<R
     const issue = normalizeIssue(rawIssue ?? {});
 
     if (attachment !== null && path !== null) {
-      const uploadRes = await githubRequest(
-        env,
-        `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            message: `Upload feedback attachment: ${attachment.safeFilename}`,
-            content: body.attachmentContentBase64 as string,
-          }),
-        },
-      );
-      const rawContent = asRecord(await uploadRes.json());
-      const content = asRecord(rawContent?.content ?? null);
-      if (typeof content?.sha === "string") committedSha = content.sha;
-      const meta = normalizeAsset({ content: rawContent ?? null });
+      try {
+        const uploadRes = await githubRequest(
+          env,
+          `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              message: `Upload feedback attachment: ${attachment.safeFilename}`,
+              content: body.attachmentContentBase64 as string,
+            }),
+          },
+        );
+        const rawContent = asRecord(await uploadRes.json());
+        const content = asRecord(rawContent?.content ?? null);
+        if (typeof content?.sha === "string") committedSha = content.sha;
+        const meta = normalizeAsset({ content: rawContent ?? null });
 
-      const url =
-        meta.downloadUrl ??
-        `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
-      const updatedBody = `${issueBody}\n\n## Attachment\n\n![Screenshot](${url})`;
-      await githubRequest(env, githubPath(env, `/issues/${issue.number}`), {
-        method: "PATCH",
-        body: JSON.stringify({ body: updatedBody }),
-      });
+        const url =
+          meta.downloadUrl ??
+          `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
+        const updatedBody = `${issueBody}\n\n## Attachment\n\n![Screenshot](${url})`;
+        await githubRequest(env, githubPath(env, `/issues/${issue.number}`), {
+          method: "PATCH",
+          body: JSON.stringify({ body: updatedBody }),
+        });
+      } catch {
+        // The issue itself exists — losing it over an attachment problem would
+        // make the client's retry create a duplicate issue. Delete any
+        // committed image and report success with attachmentFailed so callers
+        // know the report content is safe but the image is not attached.
+        if (committedSha !== null) {
+          await deleteCommittedAsset(env, path, committedSha);
+        }
+        return jsonResponse({ ...issue, attachmentFailed: true }, 201);
+      }
     }
     return jsonResponse(issue, 201);
   } catch (error) {
-    // Compensation: never leave an orphaned attachment in repository history.
-    // Awaiting matters: the isolate can be frozen as soon as the response is
-    // returned, so a fire-and-forget delete would never run.
-    if (committedSha !== null && path !== null) {
-      await deleteCommittedAsset(env, path, committedSha);
-    }
+    // Only reached before the issue exists (validation of the issue call
+    // itself): nothing attachment-related to compensate yet beyond a blob
+    // that somehow committed, which cannot happen ahead of the PUT.
     return mapGitHubError(error, "Unable to create issue.");
   }
 }
@@ -395,37 +405,42 @@ async function handlePostCommentWithAsset(env: Env, number: number, request: Req
     const comment = normalizeComment(await res.json());
 
     if (attachment !== null && path !== null) {
-      const uploadRes = await githubRequest(
-        env,
-        `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            message: `Upload feedback attachment: ${attachment.safeFilename}`,
-            content: body.attachmentContentBase64 as string,
-          }),
-        },
-      );
-      const rawContent = asRecord(await uploadRes.json());
-      const content = asRecord(rawContent?.content ?? null);
-      if (typeof content?.sha === "string") committedSha = content.sha;
-      const meta = normalizeAsset({ content: rawContent ?? null });
+      try {
+        const uploadRes = await githubRequest(
+          env,
+          `/repos/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/contents/${path}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              message: `Upload feedback attachment: ${attachment.safeFilename}`,
+              content: body.attachmentContentBase64 as string,
+            }),
+          },
+        );
+        const rawContent = asRecord(await uploadRes.json());
+        const content = asRecord(rawContent?.content ?? null);
+        if (typeof content?.sha === "string") committedSha = content.sha;
+        const meta = normalizeAsset({ content: rawContent ?? null });
 
-      const url =
-        meta.downloadUrl ??
-        `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
-      const updatedBody = `${commentBody}\n\n## Attachment\n\n![Screenshot](${url})`;
-      // Updating a comment uses the global issue-comments endpoint.
-      await githubRequest(env, githubPath(env, `/issues/comments/${comment.id}`), {
-        method: "PATCH",
-        body: JSON.stringify({ body: updatedBody }),
-      });
+        const url =
+          meta.downloadUrl ??
+          `https://raw.githubusercontent.com/${env.GITHUB_REPO_OWNER}/${env.GITHUB_REPO_NAME}/HEAD/${path}`;
+        const updatedBody = `${commentBody}\n\n## Attachment\n\n![Screenshot](${url})`;
+        // Updating a comment uses the global issue-comments endpoint.
+        await githubRequest(env, githubPath(env, `/issues/comments/${comment.id}`), {
+          method: "PATCH",
+          body: JSON.stringify({ body: updatedBody }),
+        });
+      } catch {
+        // The comment exists — same soft-success contract as issue creation.
+        if (committedSha !== null) {
+          await deleteCommittedAsset(env, path, committedSha);
+        }
+        return jsonResponse({ ...comment, attachmentFailed: true }, 201);
+      }
     }
     return jsonResponse(comment, 201);
   } catch (error) {
-    if (committedSha !== null && path !== null) {
-      await deleteCommittedAsset(env, path, committedSha);
-    }
     return mapGitHubError(error, "Unable to post comment.");
   }
 }

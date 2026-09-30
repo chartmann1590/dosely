@@ -31,6 +31,13 @@ data class FeedbackIssue(
     @SerialName("htmlUrl") val htmlUrl: String,
     val createdAt: String,
     val body: String? = null,
+    /**
+     * True when the worker created this issue but failed to attach the
+     * screenshot (the image was deleted, the report content is safe). The
+     * submission still counts as successful so a retry cannot duplicate the
+     * issue; callers can use this flag to inform the user.
+     */
+    val attachmentFailed: Boolean = false,
 )
 
 @Serializable
@@ -44,6 +51,8 @@ data class FeedbackComment(
     val body: String,
     val createdAt: String,
     val user: FeedbackUser,
+    /** See [FeedbackIssue.attachmentFailed]. */
+    val attachmentFailed: Boolean = false,
 )
 
 @Serializable

@@ -150,10 +150,11 @@ export function isCompletePng(bytes: Uint8Array): boolean {
 
 /**
  * JPEG: requires the SOI marker, walks every segment (skipping standalone
- * markers, checking each declared length), skips entropy-coded scan data
- * after each SOS (byte-stuffed 0xFF 0x00 pairs included), and requires an
- * EOI marker that terminates the payload exactly. Truncation or appended
- * garbage therefore fails the walk.
+ * markers, checking each declared length), and requires an actual frame:
+ * a SOFn frame header with sane geometry must appear before any SOS scan,
+ * entropy-coded scan data is skipped with byte-stuffing (0xFF 0x00) rules,
+ * and an EOI marker must terminate the payload exactly. A bare SOI+EOI stub
+ * or junk smuggled inside length-delimited APP segments therefore fails.
  */
 export function isCompleteJpeg(bytes: Uint8Array): boolean {
   if (bytes.length < 4) return false; // SOI + at least a 2-byte marker
@@ -161,6 +162,8 @@ export function isCompleteJpeg(bytes: Uint8Array): boolean {
 
   let offset = 2;
   let inEntropy = false;
+  let sawSOF = false;
+  let sawSOS = false;
   for (;;) {
     if (offset >= bytes.length) return false; // ran off the end before EOI
     if (inEntropy) {
@@ -178,8 +181,9 @@ export function isCompleteJpeg(bytes: Uint8Array): boolean {
     if (bytes[offset] !== 0xff) return false; // marker desync
     const marker = bytes[offset + 1];
     if (marker === 0xd9) {
-      // EOI: valid only if it terminates the payload exactly.
-      return offset + 2 === bytes.length;
+      // EOI: valid only if it terminates the payload exactly and a real
+      // frame with scan data was present (no SOI+EOI-only stubs).
+      return sawSOF && sawSOS && offset + 2 === bytes.length;
     }
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
       offset += 2; // standalone markers carry no length
@@ -187,8 +191,27 @@ export function isCompleteJpeg(bytes: Uint8Array): boolean {
     }
     const segmentLength = u16be(bytes, offset + 2);
     if (segmentLength < 2) return false;
+    if (marker === 0xda) {
+      if (!sawSOF) return false; // scan data before any frame header
+      sawSOS = true;
+      inEntropy = true;
+    } else if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      // SOFn frame header: validate the geometry block instead of trusting
+      // the segment blindly. Layout: precision(1) height(2) width(2)
+      // components(1) [per-component 3 bytes ...].
+      if (segmentLength < 8) return false;
+      const soFDataEnd = offset + 2 + segmentLength;
+      if (soFDataEnd > bytes.length) return false;
+      const precision = bytes[offset + 4];
+      const height = u16be(bytes, offset + 5);
+      const width = u16be(bytes, offset + 7);
+      const components = bytes[offset + 9];
+      if (precision < 8 || precision > 16) return false;
+      if (height < 1 || width < 1) return false;
+      if (components < 1 || components > 4) return false;
+      sawSOF = true;
+    }
     offset += 2 + segmentLength;
-    if (marker === 0xda) inEntropy = true; // SOS: scan data follows
   }
 }
 

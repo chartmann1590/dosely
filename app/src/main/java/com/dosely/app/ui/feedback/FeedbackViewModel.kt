@@ -66,6 +66,8 @@ class FeedbackViewModel(
 
     data class DetailsUiState(
         val loading: Boolean = true,
+        /** The issue this state belongs to; completions for other issues must not publish. */
+        val issueNumber: Int = 0,
         val issue: FeedbackIssue? = null,
         val comments: List<FeedbackComment> = emptyList(),
         val error: String? = null,
@@ -224,14 +226,14 @@ class FeedbackViewModel(
      *    the UI would never observe the intermediate Success state.
      */
     fun loadIssueDetails(number: Int) {
-        val sameIssue = _detailsState.value.issue?.number == number
+        val sameIssue = _detailsState.value.issueNumber == number
         _detailsState.value = if (sameIssue) {
             // Same issue: keep everything (including an in-flight reply state)
             // and just show the spinner while comments refresh.
             _detailsState.value.copy(loading = true)
         } else {
             // Switching issues: full reset (reply state must not leak across).
-            DetailsUiState(loading = true)
+            DetailsUiState(loading = true, issueNumber = number)
         }
         detailsLoadJob?.cancel()
         detailsLoadJob = viewModelScope.launch {
@@ -255,6 +257,7 @@ class FeedbackViewModel(
                 )
                 _detailsState.value = _detailsState.value.copy(
                     loading = false,
+                    issueNumber = number,
                     issue = issue,
                     comments = comments,
                     error = null,
@@ -292,7 +295,9 @@ class FeedbackViewModel(
         if (_detailsState.value.replyState is ReplyState.Submitting) return
 
         viewModelScope.launch {
-            _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Submitting)
+            if (_detailsState.value.issueNumber == issueNumber) {
+                _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Submitting)
+            }
             try {
                 // The attachment is uploaded worker-side as part of the comment
                 // operation, so a failure can never orphan an uploaded file.
@@ -314,42 +319,39 @@ class FeedbackViewModel(
                         attachmentContentBase64 = attachmentBase64,
                     ),
                 )
-                _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Success("Reply posted."))
-                // Clear the draft via the success callback BEFORE refreshing:
-                // onDone runs synchronously on the main thread, so it cannot be
-                // conflated away the way an observed Success state would be if
-                // loadIssueDetails reset replyState first. The refresh that
-                // follows swaps in the comment list with the draft already
-                // cleared, closing the accidental-duplicate-post window.
-                onDone()
-                // Only refresh when this issue is still the one displayed: if
-                // the user dismissed report A and opened report B meanwhile,
-                // refreshing A here would cancel B's load and replace B's
-                // state with A's data.
-                if (_detailsState.value.issue?.number == issueNumber) {
+                // Publish completion only into the state this reply owns: if
+                // the user dismissed report A and opened report B, A's result
+                // must never touch B's state (it could flip B's Submitting to
+                // Success and re-enable B's draft mid-flight).
+                if (_detailsState.value.issueNumber == issueNumber) {
+                    _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Success("Reply posted."))
+                    // Clear the draft via the success callback BEFORE
+                    // refreshing: onDone runs synchronously on the main
+                    // thread, so it cannot be conflated away the way an
+                    // observed Success state would be.
+                    onDone()
                     loadIssueDetails(issueNumber)
                 }
             } catch (e: ImageAttachmentException) {
-                _detailsState.value = _detailsState.value.copy(
-                    replyState = ReplyState.Failure("Attachment upload failed: ${e.message}"),
-                )
+                publishReplyFailure(issueNumber, "Attachment upload failed: ${e.message}")
             } catch (e: FeedbackWorkerApi.ApiException) {
-                _detailsState.value = _detailsState.value.copy(
-                    replyState = ReplyState.Failure(e.message ?: "Could not post the reply."),
-                )
+                publishReplyFailure(issueNumber, e.message ?: "Could not post the reply.")
             } catch (e: FeedbackWorkerApi.NetworkException) {
-                _detailsState.value = _detailsState.value.copy(
-                    replyState = ReplyState.Failure("Could not reach the feedback service. Check your connection."),
-                )
+                publishReplyFailure(issueNumber, "Could not reach the feedback service. Check your connection.")
             } catch (e: Exception) {
-                _detailsState.value = _detailsState.value.copy(
-                    replyState = ReplyState.Failure("Could not post the reply: ${e.message ?: "unknown error"}"),
-                )
+                publishReplyFailure(issueNumber, "Could not post the reply: ${e.message ?: "unknown error"}")
             }
         }
     }
 
     fun resetReplyState() {
         _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Idle)
+    }
+
+    /** Failure publication follows the same issue-scoping rule as success. */
+    private fun publishReplyFailure(issueNumber: Int, message: String) {
+        if (_detailsState.value.issueNumber == issueNumber) {
+            _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Failure(message))
+        }
     }
 }
