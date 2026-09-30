@@ -261,7 +261,7 @@ fun IssueDetailsDialog(
     report: BugReport,
     state: FeedbackViewModel.DetailsUiState,
     onRefresh: () -> Unit,
-    onReply: (text: String, attachmentUri: Uri?) -> Unit,
+    onReply: (text: String, attachmentUri: Uri?, onCompleted: () -> Unit) -> Unit,
     onReplySucceeded: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -269,15 +269,12 @@ fun IssueDetailsDialog(
     var attachmentUri by remember { mutableStateOf<Uri?>(null) }
     val context = LocalContext.current
 
-    // Clear the draft only after the reply actually posted; failures keep the
-    // text and attachment so the user can retry without retyping.
-    LaunchedEffect(state.replyState) {
-        if (state.replyState is FeedbackViewModel.ReplyState.Success) {
-            replyText = ""
-            attachmentUri = null
-            onReplySucceeded()
-        }
-    }
+    // The draft is cleared synchronously from onCompleted (fired by the
+    // ViewModel when the reply actually posted, before it refreshes the
+    // issue). Observing replyState here instead would be racy: back-to-back
+    // StateFlow writes conflate, so Success can be replaced before this
+    // composable ever sees it, leaving the posted text in the field.
+    // Failures never call onCompleted, so drafts survive for retry.
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         attachmentUri = uri
@@ -402,9 +399,14 @@ fun IssueDetailsDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    // The draft is cleared only via onReplySucceeded (below) so a
-                    // failed upload/post never discards the user's text or image.
-                    onReply(replyText, attachmentUri)
+                    // onCompleted runs synchronously on success: clear the
+                    // draft (and reset reply state) BEFORE the ViewModel
+                    // refreshes, closing the duplicate-post window.
+                    onReply(replyText, attachmentUri) {
+                        replyText = ""
+                        attachmentUri = null
+                        onReplySucceeded()
+                    }
                 },
                 enabled = replyText.isNotBlank() && state.replyState !is FeedbackViewModel.ReplyState.Submitting && state.error == null,
             ) {

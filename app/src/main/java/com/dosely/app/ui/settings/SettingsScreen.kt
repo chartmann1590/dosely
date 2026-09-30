@@ -392,8 +392,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
             report = report,
             state = feedbackDetailsState,
             onRefresh = { feedbackViewModel.refreshIssueDetails(report.number) },
-            onReply = { text, attachmentUri ->
-                feedbackViewModel.submitReply(context.applicationContext, report.number, text, attachmentUri) { }
+            onReply = { text, attachmentUri, onCompleted ->
+                feedbackViewModel.submitReply(context.applicationContext, report.number, text, attachmentUri, onCompleted)
             },
             onReplySucceeded = { feedbackViewModel.resetReplyState() },
             onDismiss = {

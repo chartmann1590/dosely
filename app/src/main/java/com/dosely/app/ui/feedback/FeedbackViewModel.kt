@@ -207,6 +207,15 @@ class FeedbackViewModel(
 
     // ------------------------------------------------------- details + replies
 
+    /**
+     * Loads (or refreshes) the issue + comments.
+     *
+     * Note: this resets [DetailsUiState.replyState] to Idle. Callers that must
+     * not lose a pending reply outcome (see [submitReply]) clear the draft via
+     * their success callback BEFORE refreshing, because back-to-back writes to
+     * a StateFlow conflate and the UI would never observe the intermediate
+     * Success state.
+     */
     fun loadIssueDetails(number: Int) {
         _detailsState.value = DetailsUiState(loading = true)
         viewModelScope.launch {
@@ -286,8 +295,14 @@ class FeedbackViewModel(
 
                 api.postComment(issueNumber, PostCommentRequest(commentBody))
                 _detailsState.value = _detailsState.value.copy(replyState = ReplyState.Success("Reply posted."))
-                loadIssueDetails(issueNumber)
+                // Clear the draft via the success callback BEFORE refreshing:
+                // onDone runs synchronously on the main thread, so it cannot be
+                // conflated away the way an observed Success state would be if
+                // loadIssueDetails reset replyState first. The refresh that
+                // follows swaps in the comment list with the draft already
+                // cleared, closing the accidental-duplicate-post window.
                 onDone()
+                loadIssueDetails(issueNumber)
             } catch (e: ImageAttachmentException) {
                 _detailsState.value = _detailsState.value.copy(
                     replyState = ReplyState.Failure("Attachment upload failed: ${e.message}"),

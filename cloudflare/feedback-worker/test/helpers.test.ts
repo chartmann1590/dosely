@@ -10,7 +10,7 @@ import {
   normalizeIssue,
   sanitizeFilename,
 } from "../src/github";
-import { buildAssetPath, validateAssetRequest } from "../src/assets";
+import { buildAssetPath, isSupportedImageContent, validateAssetRequest } from "../src/assets";
 import { describe, expect, it } from "vitest";
 
 describe("isFeedbackIssue guard", () => {
@@ -147,12 +147,61 @@ describe("validation helpers", () => {
 });
 
 describe("asset upload validation", () => {
-  const tinyPngB64 = "iVBORw0KGgoAAAANSUhEUg==";
+  // Helpers to build base64 fixtures from raw bytes (node + workers both ship btoa).
+  const b64 = (bytes: number[]) => btoa(String.fromCharCode(...bytes));
+  const bytesOf = (base64: string) => Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 
-  it("accepts a valid png upload", () => {
-    const parsed = validateAssetRequest("issue-20260929-101010-a1b2c3.png", tinyPngB64);
-    expect(parsed).not.toBeNull();
-    expect(parsed!.safeFilename).toBe("issue-20260929-101010-a1b2c3.png");
+  // Real 1x1 PNG (signature + IHDR + IDAT + IEND).
+  const tinyPngB64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  // Minimal header-shaped JPEG (FF D8 FF E0 + JFIF APP0 marker bytes).
+  const jpegHeaderB64 = b64([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+  // RIFF....WEBP container header with a VP8 chunk marker.
+  const webpHeaderB64 = b64([
+    0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20,
+  ]);
+  // Plain UTF-8 text — the attack payload class: valid base64, real bytes,
+  // but not an image at all.
+  const textB64 = b64(Array.from("#!/bin/sh\nrm -rf /\n", (c) => c.charCodeAt(0)));
+
+  it("accepts uploads whose bytes match the claimed format", () => {
+    for (const [name, payload] of [
+      ["issue-20260929-101010-a1b2c3.png", tinyPngB64],
+      ["comment-1-20260929-101010-a1b2c3.jpg", jpegHeaderB64],
+      ["comment-1-20260929-101010-a1b2c3.jpeg", jpegHeaderB64],
+      ["shot.webp", webpHeaderB64],
+    ] as const) {
+      const parsed = validateAssetRequest(name, payload);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.safeFilename).toBe(name);
+    }
+  });
+
+  it("rejects non-image bytes regardless of the file extension", () => {
+    expect(validateAssetRequest("payload.png", textB64)).toBeNull();
+    expect(validateAssetRequest("payload.jpg", textB64)).toBeNull();
+    expect(validateAssetRequest("payload.webp", textB64)).toBeNull();
+  });
+
+  it("rejects payloads whose real format disagrees with the extension", () => {
+    expect(validateAssetRequest("photo.jpg", tinyPngB64)).toBeNull();
+    expect(validateAssetRequest("photo.png", jpegHeaderB64)).toBeNull();
+    expect(validateAssetRequest("photo.webp", tinyPngB64)).toBeNull();
+  });
+
+  it("rejects payloads too short to contain an image signature", () => {
+    const oneByte = b64([0x89]);
+    const riffOnly = b64([0x52, 0x49, 0x46, 0x46]);
+    expect(validateAssetRequest("a.png", oneByte)).toBeNull();
+    expect(validateAssetRequest("a.webp", riffOnly)).toBeNull(); // missing WEBP at offset 8
+  });
+
+  it("isSupportedImageContent classifies headers", () => {
+    expect(isSupportedImageContent(bytesOf(tinyPngB64))).toBe("png");
+    expect(isSupportedImageContent(bytesOf(jpegHeaderB64))).toBe("jpeg");
+    expect(isSupportedImageContent(bytesOf(webpHeaderB64))).toBe("webp");
+    expect(isSupportedImageContent(bytesOf(textB64))).toBeNull();
+    expect(isSupportedImageContent(null)).toBeNull();
   });
 
   it("rejects unsupported extensions", () => {
@@ -166,6 +215,11 @@ describe("asset upload validation", () => {
   it("rejects oversized payloads", () => {
     const big = "A".repeat((8 * 1024 * 1024 + 1) * 4);
     expect(validateAssetRequest("big.png", big)).toBeNull();
+  });
+
+  it("rejects payloads with malformed base64 padding in the header", () => {
+    // isValidBase64 accepts this; the header decoder must not throw on it.
+    expect(validateAssetRequest("ok.png", "aGVsbG8 world")).toBeNull();
   });
 
   it("builds paths strictly under the assets dir", () => {
