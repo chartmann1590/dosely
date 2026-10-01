@@ -25,8 +25,10 @@ fun AdBanner(
 ) {
     val context = LocalContext.current
     val adView = remember {
+        val displayMetrics = context.resources.displayMetrics
+        val widthDp = (displayMetrics.widthPixels / displayMetrics.density).toInt().coerceAtLeast(320)
         AdView(context).apply {
-            setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, 360))
+            setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, widthDp))
             setAdUnitId(adUnitId)
             adListener = object : AdListener() {
                 override fun onAdFailedToLoad(error: LoadAdError) {

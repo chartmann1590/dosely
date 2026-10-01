@@ -42,6 +42,11 @@ import com.dosely.app.translate.S
 import com.dosely.app.ui.components.EmptyState
 import com.dosely.app.ui.components.Chip
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Surface
+import androidx.compose.ui.text.input.KeyboardType
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -98,6 +103,7 @@ fun DosesScreen(viewModel: DosesViewModel = koinViewModel()) {
     if (showLogDialog) {
         LogInjectionDialog(
             suggestedMg = ui.suggestedDoseMg,
+            availableDoses = ui.availableDoses,
             onDismiss = { showLogDialog = false },
             onConfirm = { site, mg, notes ->
                 viewModel.logInjection(site, mg, notes)
@@ -146,45 +152,87 @@ fun DosesScreen(viewModel: DosesViewModel = koinViewModel()) {
 private fun DoseRow(entry: InjectionEntity, onDelete: () -> Unit) {
     val date = LocalDate.ofEpochDay(entry.epochDay)
         .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(16.dp),
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
     ) {
-        Column(Modifier.fillMaxWidth(0.85f)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(date, style = MaterialTheme.typography.titleMedium)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(date, style = MaterialTheme.typography.titleMedium)
+                    if (entry.skipped) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                        ) {
+                            Text(
+                                S("doses_skip"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 if (entry.skipped) {
                     Text(
-                        S("doses_skip"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
+                        S("doses_scheduled"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                        ) {
+                            Text(
+                                "%.2f".format(entry.doseMg).trimEnd('0').trimEnd('.') + " " + S("doses_mg"),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                        ) {
+                            Text(
+                                S(siteKey(entry.site)),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                }
+                if (entry.notes.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        entry.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                if (entry.skipped) {
-                    S("doses_scheduled")
-                } else {
-                    "%.1f".format(entry.doseMg) + " " + S("doses_mg") + " · " + S(siteKey(entry.site))
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (entry.notes.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(entry.notes, style = MaterialTheme.typography.bodySmall)
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = S("common_delete"),
+                    tint = MaterialTheme.colorScheme.outline,
+                )
             }
-        }
-        IconButton(onClick = onDelete, modifier = Modifier.align(Alignment.CenterEnd)) {
-            Icon(
-                Icons.Filled.Delete,
-                contentDescription = S("common_delete"),
-                tint = MaterialTheme.colorScheme.outline,
-            )
         }
     }
 }
@@ -192,11 +240,12 @@ private fun DoseRow(entry: InjectionEntity, onDelete: () -> Unit) {
 @Composable
 private fun LogInjectionDialog(
     suggestedMg: Double,
+    availableDoses: List<Double>,
     onDismiss: () -> Unit,
     onConfirm: (site: String, mg: Double, notes: String) -> Unit,
 ) {
     var site by remember { mutableStateOf("Abdomen") }
-    var mgText by remember { mutableStateOf("%.1f".format(suggestedMg)) }
+    var mgText by remember { mutableStateOf("%.2f".format(suggestedMg).trimEnd('0').trimEnd('.')) }
     var notes by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -219,12 +268,32 @@ private fun LogInjectionDialog(
                         )
                     }
                 }
+                if (availableDoses.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Text(S("doses_mg"), style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        availableDoses.forEach { d ->
+                            val label = "%.2f".format(d).trimEnd('0').trimEnd('.')
+                            val isSelected = mgText.replace(',', '.').toDoubleOrNull() == d
+                            Chip(
+                                text = "$label " + S("doses_mg"),
+                                selected = isSelected,
+                                onClick = { mgText = label },
+                            )
+                        }
+                    }
+                }
                 Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
                     value = mgText,
-                    onValueChange = { v -> mgText = v.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange = { v -> mgText = v.filter { c -> c.isDigit() || c == '.' || c == ',' } },
                     label = { Text(S("doses_mg")) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(10.dp))

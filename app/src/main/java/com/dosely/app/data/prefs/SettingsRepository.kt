@@ -84,8 +84,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setOnboarded(value: Boolean) = edit { it[K.ONBOARDED] = value }
     suspend fun setMed(id: String) = edit { it[K.MED_ID] = id }
     suspend fun setInterval(days: Int) = edit { it[K.INTERVAL] = days }
-    suspend fun setReminderTime(hour: Int, minute: Int) = edit {
-        it[K.REM_HOUR] = hour; it[K.REM_MIN] = minute
+    suspend fun setReminderTime(hour: Int, minute: Int) {
+        edit {
+            it[K.REM_HOUR] = hour
+            it[K.REM_MIN] = minute
+        }
+        com.dosely.app.reminder.ReminderWorker.scheduleDaily(context, hour, minute)
     }
     suspend fun setFirstDoseDay(epochDay: Long) = edit { it[K.FIRST_DOSE] = epochDay.toString() }
     suspend fun setPens(count: Int) = edit { it[K.PENS] = count }

@@ -17,6 +17,10 @@
     <string name="onb_dose_days">days</string>
     <string name="onb_dose_time">Preferred reminder time</string>
     <string name="onb_dose_first">Date of your first (or next) injection</string>
+    <string name="onb_first_dose_hint">YYYY-MM-DD</string>
+    <string name="onb_dose_today">Today</string>
+    <string name="onb_dose_tomorrow">Tomorrow</string>
+    <string name="onb_dose_yesterday">Yesterday</string>
     <string name="onb_stock_title">How many pens do you have on hand?</string>
     <string name="onb_stock_sub">We will warn you before you run out and remind you to re-up in time.</string>
     <string name="onb_weight_units">Units</string>
@@ -63,6 +67,9 @@
     <string name="cal_weighins_month">%1$d weigh-ins</string>
     <string name="cal_month_change">This month</string>
     <string name="cal_legend">Taken · Skipped · Weigh-in</string>
+    <string name="cal_legend_injection">Injection</string>
+    <string name="cal_legend_skipped">Skipped</string>
+    <string name="cal_legend_weighin">Weigh-in</string>
     <string name="cal_day_injection">Injection · %1$s</string>
     <string name="cal_day_skipped">Dose skipped</string>
     <string name="cal_day_weight">Weigh-in · %1$s</string>
@@ -94,6 +101,7 @@
     <string name="home_stock_out">Out of pens — re-up needed</string>
     <string name="home_stock_ok">Stock looks good</string>
     <string name="home_stock_refill">Stock lasts until ~%1$s</string>
+    <string name="home_stock_runs_out">Runs out on</string>
     <string name="home_weight_title">Weight</string>
     <string name="home_weight_current">Current</string>
     <string name="home_weight_start">Start</string>
@@ -105,13 +113,17 @@
     <string name="home_streak">Injection streak</string>
     <string name="home_streak_days">%1$d in a row</string>
     <string name="home_adherence">Adherence</string>
+    <string name="home_coach_title">AI Health Coach</string>
     <string name="home_coach_hint">Ask your AI coach anything about your journey</string>
+    <string name="home_coach_open">Ask Coach</string>
     <string name="home_disclaimer_short">Dosely is a tracking tool, not medical advice.</string>
 
     <!-- ============ Doses ============ -->
     <string name="doses_title">Injection log</string>
     <string name="doses_empty">No injections logged yet.\nYour first one will appear here.</string>
     <string name="doses_log_new">Log an injection</string>
+    <string name="doses_select_dose">Select dose</string>
+    <string name="doses_custom_dose">Custom</string>
     <string name="doses_site">Injection site</string>
     <string name="doses_site_abdomen">Abdomen</string>
     <string name="doses_site_thigh">Thigh</string>

@@ -31,8 +31,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Button
@@ -306,6 +308,21 @@ private fun ScheduleStage(viewModel: OnboardingViewModel) {
         Spacer(Modifier.height(20.dp))
         Text(S("onb_dose_first"), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val today = java.time.LocalDate.now()
+            listOf(
+                S("onb_date_today") to today.toString(),
+                S("onb_date_tomorrow") to today.plusDays(1).toString(),
+                S("onb_date_yesterday") to today.minusDays(1).toString(),
+            ).forEach { (label, dateStr) ->
+                Chip(
+                    text = label,
+                    selected = ui.firstDoseText.trim() == dateStr,
+                    onClick = { viewModel.update { it.copy(firstDoseText = dateStr) } },
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = ui.firstDoseText,
             onValueChange = { text -> viewModel.update { it.copy(firstDoseText = text) } },
@@ -359,6 +376,7 @@ private fun WeightStage(viewModel: OnboardingViewModel) {
             label = { Text(S("onb_weight_kg") + " (" + Units.label(ui.useImperial) + ")") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
@@ -371,6 +389,7 @@ private fun WeightStage(viewModel: OnboardingViewModel) {
             label = { Text(S("onb_weight_goal") + " (" + Units.label(ui.useImperial) + ")") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         )
     }
 }
@@ -468,6 +487,7 @@ private fun AiStage(viewModel: OnboardingViewModel) {
             S("onb_ai_skip"),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable { viewModel.update { it.copy(stage = 6) } },
         )
     }
 }

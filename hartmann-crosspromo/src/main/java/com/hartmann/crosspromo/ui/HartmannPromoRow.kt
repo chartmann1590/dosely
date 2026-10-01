@@ -31,7 +31,7 @@ fun HartmannPromoRow(
     // keep the composition alive but re-RESUME the back-stack entry — plus
     // once for the initial composition. Forced refreshes dedupe in flight,
     // so the initial double call issues exactly one request.
-    val owner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(controller, owner) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) controller.load()
