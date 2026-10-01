@@ -44,3 +44,6 @@ cloudflare/feedback-worker/node_modules/
 .dev.vars.*
 .wrangler/
 .env
+*service*account*.json
+play-*.json
+*.service-account.json

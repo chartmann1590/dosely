@@ -21,6 +21,9 @@
     <string name="onb_dose_today">Today</string>
     <string name="onb_dose_tomorrow">Tomorrow</string>
     <string name="onb_dose_yesterday">Yesterday</string>
+    <string name="onb_date_today">Today</string>
+    <string name="onb_date_tomorrow">Tomorrow</string>
+    <string name="onb_date_yesterday">Yesterday</string>
     <string name="onb_stock_title">How many pens do you have on hand?</string>
     <string name="onb_stock_sub">We will warn you before you run out and remind you to re-up in time.</string>
     <string name="onb_weight_units">Units</string>

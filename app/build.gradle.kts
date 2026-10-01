@@ -6,16 +6,33 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+val keystoreFilePath = System.getenv("KEYSTORE_FILE")
+    ?: System.getenv("RELEASE_KEYSTORE_PATH")
+    ?: project.findProperty("keystore.file") as? String
+val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+    ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    ?: project.findProperty("keystore.password") as? String
+val keystoreKeyAlias = System.getenv("KEY_ALIAS")
+    ?: System.getenv("ANDROID_KEY_ALIAS")
+    ?: project.findProperty("key.alias") as? String
+val keystoreKeyPassword = System.getenv("KEY_PASSWORD")
+    ?: System.getenv("ANDROID_KEY_PASSWORD")
+    ?: project.findProperty("key.password") as? String
+val hasReleaseKeystore = keystoreFilePath != null && file(keystoreFilePath).exists()
+
+val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+val ciVersionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+
 android {
     namespace = "com.dosely.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dosely.app"
+        applicationId = "com.charles.dosely"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = ciVersionCode
+        versionName = ciVersionName
         vectorDrawables { useSupportLibrary = true }
 
         // AdMob IDs are injected from environment/CI secrets and are NEVER
@@ -59,11 +76,25 @@ android {
         )
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreFilePath!!)
+                storePassword = keystorePassword
+                keyAlias = keystoreKeyAlias
+                keyPassword = keystoreKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {

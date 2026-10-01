@@ -46,7 +46,7 @@ dependencies {
     compileOnly(libs.androidx.ui)
     compileOnly(libs.androidx.ui.graphics)
     compileOnly(libs.androidx.material3)
-    compileOnly(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     // Icon loading: uses Coil when the host app provides it.
     compileOnly("io.coil-kt:coil-compose:2.6.0")
