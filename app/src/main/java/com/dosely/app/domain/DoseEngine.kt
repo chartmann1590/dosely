@@ -120,7 +120,7 @@ object DoseEngine {
     ): StockStatus {
         val next = nextDose(today, intervalDays, today.toEpochDay(), injections)
         var remaining = pens
-        var date: LocalDate = if (next.takenToday) addIntervals(next.date, intervalDays) else next.date
+        var date: LocalDate = next.date
         var runsOut: LocalDate? = if (remaining <= 0) date else null
         var guard = 0
         while (remaining > 0 && guard < 104) {

@@ -9,3 +9,8 @@
 -keepclasseswithmembers class com.hartmann.crosspromo.model.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# Coil is optional for host apps (checked reflectively at runtime)
+-dontwarn coil.**
+-dontwarn coil.compose.**
+

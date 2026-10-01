@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -179,9 +180,9 @@ private fun DayCellView(cell: DayCell, isSelected: Boolean, onClick: () -> Unit,
 @Composable
 private fun Legend() {
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        LegendDot(MaterialTheme.colorScheme.primaryContainer, "Injection")
-        LegendDot(MaterialTheme.colorScheme.errorContainer, "Skipped")
-        LegendDot(MaterialTheme.colorScheme.secondaryContainer, "Weigh-in")
+        LegendDot(MaterialTheme.colorScheme.primaryContainer, S("cal_legend_injection"))
+        LegendDot(MaterialTheme.colorScheme.errorContainer, S("cal_legend_skipped"))
+        LegendDot(MaterialTheme.colorScheme.secondaryContainer, S("cal_legend_weighin"))
     }
 }
 
@@ -190,8 +191,11 @@ private fun LegendDot(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(color))
         Spacer(Modifier.padding(2.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -200,36 +204,89 @@ private fun SelectedDayCard(ui: CalendarUi) {
     SectionCard {
         val date = ui.selected
         if (date == null) {
-            Text(S("cal_day_none"), style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                S("cal_day_none"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             return@SectionCard
         }
         Text(
             date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
             style = MaterialTheme.typography.titleMedium,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
         val inj = ui.selectedInjection
-        if (inj != null && !inj.skipped) {
+        val weight = ui.selectedWeight
+        if (inj == null && weight == null) {
             Text(
-                S("cal_day_injection", "%.1f".format(inj.doseMg) + " " + S("doses_mg")),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
+                S("cal_day_none"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        if (inj != null && inj.skipped) {
-            Text(S("cal_day_skipped"), style = MaterialTheme.typography.bodyLarge, color = Coral)
-        }
-        ui.selectedWeight?.let { w ->
-            Text(
-                S("cal_day_weight", Units.format(w.grams / 1000.0, ui.useImperial)),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MintStrong,
-            )
-        }
-        if (inj == null && ui.selectedWeight == null) {
-            Text(S("cal_day_none"), style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (inj != null && !inj.skipped) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("💉", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                S("cal_day_injection", "%.2f".format(inj.doseMg).trimEnd('0').trimEnd('.') + " " + S("doses_mg")),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    }
+                }
+                if (inj != null && inj.skipped) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("⚠️", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                S("cal_day_skipped"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                            )
+                        }
+                    }
+                }
+                if (weight != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("⚖️", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                S("cal_day_weight", Units.format(weight.grams / 1000.0, ui.useImperial)),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

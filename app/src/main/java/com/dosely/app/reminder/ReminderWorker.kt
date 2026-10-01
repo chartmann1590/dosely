@@ -96,9 +96,9 @@ class ReminderWorker(
         const val ID_WEEKLY = 2003
         const val TAG = "dosely-reminders"
 
-        fun scheduleDaily(context: Context) {
+        fun scheduleDaily(context: Context, hour: Int = 9, minute: Int = 0) {
             val request = PeriodicWorkRequestBuilder<ReminderWorker>(1, TimeUnit.DAYS)
-                .setInitialDelay(delayToNextNineAm(), TimeUnit.MILLISECONDS)
+                .setInitialDelay(delayToNextReminder(hour, minute), TimeUnit.MILLISECONDS)
                 .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
                 .addTag(TAG)
                 .build()
@@ -109,9 +109,9 @@ class ReminderWorker(
             )
         }
 
-        private fun delayToNextNineAm(): Long {
+        private fun delayToNextReminder(hour: Int, minute: Int): Long {
             val now = LocalDateTime.now()
-            var next = LocalDateTime.of(LocalDate.now(), LocalTime.of(9, 0))
+            var next = LocalDateTime.of(LocalDate.now(), LocalTime.of(hour.coerceIn(0, 23), minute.coerceIn(0, 59)))
             if (!next.isAfter(now)) next = next.plusDays(1)
             return Duration.between(now, next).toMillis()
         }

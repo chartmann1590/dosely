@@ -99,7 +99,7 @@ object WidgetData {
             onboarded = true,
             nextLabel = nextLabel,
             pens = "${s.pensOnHand} · " + med.brand,
-            weight = weights.lastOrNull()?.grams?.let { String.format("%.1f kg", it / 1000.0) } ?: "—",
+            weight = weights.lastOrNull()?.grams?.let { com.dosely.app.domain.Units.format(it / 1000.0, s.useImperial) } ?: "—",
         )
     }
 }

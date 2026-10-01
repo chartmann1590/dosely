@@ -29,6 +29,8 @@ class PromoUiController(
     private val placement: String,
     private val limit: Int = 3,
     private val repository: CrossPromoRepository = CrossPromoRepository(),
+    /** Re-roll on every load() instead of only when the cache goes stale. */
+    private val refreshEveryEntry: Boolean = true,
 ) {
     var state by mutableStateOf<PromoUiState>(PromoUiState.Hidden)
         private set
@@ -37,15 +39,16 @@ class PromoUiController(
     private var observing = false
 
     /**
-     * Reads the cache, starts the SWR refresh, and keeps observing the cache
-     * so state updates when the background refresh lands (including the
-     * cold-install case where the cache is empty until the first response
-     * arrives). Call [dispose] when the hosting screen goes away.
+     * Shows the cached set instantly, then re-rolls in the background so a
+     * fresh pick set replaces it — [refreshEveryEntry] makes each screen
+     * entry show a different selection. The cache flow keeps the UI in sync
+     * whichever response lands (also covers the cold-install first load).
+     * Call [dispose] when the hosting screen goes away.
      */
     fun load() {
         val source = HartmannCrossPromo.sourcePackage()
         val session = HartmannCrossPromo.sessionId()
-        repository.refreshIfNeeded(source, placement, limit, session)
+        repository.refreshIfNeeded(source, placement, limit, session, force = refreshEveryEntry)
         if (observing) return
         observing = true
         scope.launch {

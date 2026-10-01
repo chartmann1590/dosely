@@ -20,6 +20,7 @@ data class DosesUi(
     val entries: List<InjectionEntity> = emptyList(),
     val suggestedDoseMg: Double = 0.25,
     val canSkip: Boolean = false,
+    val availableDoses: List<Double> = emptyList(),
 )
 
 class DosesViewModel(
@@ -42,6 +43,7 @@ class DosesViewModel(
             entries = injections,
             suggestedDoseMg = suggested,
             canSkip = !takenToday,
+            availableDoses = med.doses,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DosesUi())
 

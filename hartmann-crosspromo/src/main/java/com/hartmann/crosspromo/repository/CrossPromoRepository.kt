@@ -40,6 +40,9 @@ class CrossPromoRepository(
 
     /**
      * Starts a background refresh when the cache is stale or empty.
+     * With [force] the freshness check is skipped — used when the host wants
+     * a fresh pick set on every screen entry (the server re-rolls per request).
+     * In-flight requests are deduplicated per (source, placement) either way.
      * Returns true if a refresh was actually started.
      */
     fun refreshIfNeeded(
@@ -51,10 +54,7 @@ class CrossPromoRepository(
     ): Boolean {
         val key = "$sourcePackage|$placement"
         synchronized(this) {
-            if (!force) {
-                if (key in refreshing) return false
-                // Freshness is checked inside the coroutine (suspend cache read).
-            }
+            if (key in refreshing) return false
             refreshing.add(key)
         }
         scope.launch {

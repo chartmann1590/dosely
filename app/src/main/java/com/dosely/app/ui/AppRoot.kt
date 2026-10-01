@@ -192,7 +192,13 @@ private fun MainScaffold(appViewModel: AppViewModel, initialRoute: String?, adsR
                     fadeOut(tween(180)) + slideOutHorizontally(tween(280)) { it / 10 }
                 },
             ) {
-                composable(Routes.HOME) { HomeScreen(appViewModel) }
+                composable(Routes.HOME) {
+                    HomeScreen(
+                        appViewModel = appViewModel,
+                        onNavigateToCoach = { navController.navigate(Routes.COACH) },
+                        onNavigateToDoses = { navController.navigate(Routes.DOSES) },
+                    )
+                }
                 composable(Routes.DOSES) { DosesScreen() }
                 composable(Routes.CALENDAR) { CalendarScreen() }
                 composable(Routes.WEIGHT) { WeightScreen() }

@@ -9,3 +9,8 @@
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
 # Room
 -keep class * extends androidx.room.RoomDatabase
+
+# Optional cross-promo dependencies
+-dontwarn coil.**
+-dontwarn coil.compose.**
+
