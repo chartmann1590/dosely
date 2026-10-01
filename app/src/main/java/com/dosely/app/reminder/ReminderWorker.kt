@@ -12,7 +12,11 @@ import com.dosely.app.data.repo.DoselyRepository
 import com.dosely.app.domain.DoseEngine
 import com.dosely.app.domain.Medications
 import com.dosely.app.translate.L
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 import java.time.DayOfWeek
 import java.time.Duration
@@ -96,17 +100,28 @@ class ReminderWorker(
         const val ID_WEEKLY = 2003
         const val TAG = "dosely-reminders"
 
-        fun scheduleDaily(context: Context, hour: Int = 9, minute: Int = 0) {
-            val request = PeriodicWorkRequestBuilder<ReminderWorker>(1, TimeUnit.DAYS)
-                .setInitialDelay(delayToNextReminder(hour, minute), TimeUnit.MILLISECONDS)
-                .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
-                .addTag(TAG)
-                .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                "dosely-daily-reminders",
-                ExistingPeriodicWorkPolicy.UPDATE,
-                request,
-            )
+        fun scheduleDaily(context: Context, hour: Int? = null, minute: Int? = null): Job {
+            val appContext = context.applicationContext
+            return CoroutineScope(Dispatchers.IO).launch {
+                val (targetHour, targetMinute) = if (hour != null && minute != null) {
+                    hour to minute
+                } else {
+                    val settingsRepo = runCatching { GlobalContext.get().get<SettingsRepository>() }.getOrNull()
+                        ?: SettingsRepository(appContext)
+                    val current = runCatching { settingsRepo.current() }.getOrNull()
+                    (current?.reminderHour ?: 9) to (current?.reminderMinute ?: 0)
+                }
+                val request = PeriodicWorkRequestBuilder<ReminderWorker>(1, TimeUnit.DAYS)
+                    .setInitialDelay(delayToNextReminder(targetHour, targetMinute), TimeUnit.MILLISECONDS)
+                    .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
+                    .addTag(TAG)
+                    .build()
+                WorkManager.getInstance(appContext).enqueueUniquePeriodicWork(
+                    "dosely-daily-reminders",
+                    ExistingPeriodicWorkPolicy.UPDATE,
+                    request,
+                )
+            }
         }
 
         private fun delayToNextReminder(hour: Int, minute: Int): Long {

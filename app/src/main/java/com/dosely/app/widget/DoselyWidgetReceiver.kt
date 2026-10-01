@@ -30,7 +30,7 @@ class DoselyWidgetReceiver : GlanceAppWidgetReceiver() {
             val pending = goAsync()
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 try {
-                    ReminderWorker.scheduleDaily(context)
+                    ReminderWorker.scheduleDaily(context).join()
                     DoselyWidget.updateAll(context)
                 } catch (_: Throwable) {
                 } finally {
@@ -41,7 +41,7 @@ class DoselyWidgetReceiver : GlanceAppWidgetReceiver() {
     }
 
     companion object {
-        const val ACTION_REFRESH = "com.dosely.app.ACTION_WIDGET_REFRESH"
+        const val ACTION_REFRESH = "com.charles.dosely.ACTION_WIDGET_REFRESH"
 
         fun schedulePeriodicRefresh(context: Context) {
             val request = androidx.work.PeriodicWorkRequestBuilder<WidgetRefreshWorker>(6, java.util.concurrent.TimeUnit.HOURS)

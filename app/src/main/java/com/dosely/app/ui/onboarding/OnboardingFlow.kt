@@ -311,9 +311,9 @@ private fun ScheduleStage(viewModel: OnboardingViewModel) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val today = java.time.LocalDate.now()
             listOf(
-                S("onb_date_today") to today.toString(),
-                S("onb_date_tomorrow") to today.plusDays(1).toString(),
-                S("onb_date_yesterday") to today.minusDays(1).toString(),
+                S("onb_dose_today") to today.toString(),
+                S("onb_dose_tomorrow") to today.plusDays(1).toString(),
+                S("onb_dose_yesterday") to today.minusDays(1).toString(),
             ).forEach { (label, dateStr) ->
                 Chip(
                     text = label,
