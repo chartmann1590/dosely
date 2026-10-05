@@ -104,6 +104,9 @@ private fun WatchHome(
     }
 
     LaunchedEffect(screen) {
+        if (screen != "success") {
+            listState.scrollToItem(0)
+        }
         if (screen == "success") {
             delay(1600)
             screen = "home"

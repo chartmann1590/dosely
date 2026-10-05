@@ -149,6 +149,19 @@
     padding: 5px 13px; border-radius: 999px; font-size: .84rem;
   }
 
+  /* wear os showcase */
+  .wear-grid { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 26px; }
+  .wear-card { text-align: center; background: #0F2622; border-radius: 24px; padding: 24px 16px 20px; border: 1px solid rgba(78,216,176,0.18); transition: transform .2s ease, box-shadow .2s ease; }
+  .wear-card:hover { transform: translateY(-6px); box-shadow: 0 16px 36px rgba(0,0,0,0.5); }
+  .watch-bezel {
+    width: 170px; height: 170px; margin: 0 auto 16px; border-radius: 50%;
+    background: #05110F; border: 7px solid #1A3D36; box-shadow: 0 12px 30px rgba(0,0,0,0.7), inset 0 0 12px rgba(0,0,0,0.9);
+    overflow: hidden; display: flex; align-items: center; justify-content: center;
+  }
+  .watch-bezel img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+  .wear-card h4 { color: #4ED8B0; font-size: 1.05rem; margin-bottom: 6px; }
+  .wear-card p { color: #90B5AC; font-size: .84rem; line-height: 1.4; margin: 0; }
+
   /* roadmap */
   .timeline { margin-top: 36px; border-left: 2px solid rgba(62,207,116,.4); padding-left: 26px; display: grid; gap: 22px; }
   .tl-item { position: relative; }
@@ -189,6 +202,7 @@
 <nav>
   <a class="brand" href="#"><img src="assets/icon.png" alt="Dosely" /> Dosely</a>
   <a class="link" href="#features">Features</a>
+  <a class="link" href="#wear">Wear OS</a>
   <a class="link" href="#screens">Screens</a>
   <a class="link" href="#privacy">Privacy</a>
   <a class="link" href="#roadmap">Roadmap</a>
@@ -259,6 +273,57 @@
         <source src="assets/dosely_promo.mp4" type="video/mp4" />
         Your browser doesn't support embedded video.
       </video>
+    </div>
+  </div>
+</section>
+
+<section id="wear" style="background:#05110F; color:#E8F5F2; padding: 80px 6vw;">
+  <div class="wrap">
+    <span class="kicker" style="color:var(--mint);">On Your Wrist</span>
+    <h2 style="color:#E8F5F2;">Wear OS Smartwatch Companion</h2>
+    <p class="lede" style="color:#A0C8BC;">Full standalone wrist support — glance at your active routine, confirm injections with smart 6-site rotation, tap 1-tap hydration (+250 mL), and log weights from your smartwatch with durable offline queueing.</p>
+    
+    <div class="wear-grid">
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/01_wear_dashboard_hero.png" alt="Hero Dashboard" /></div>
+        <h4>Active Routine</h4>
+        <p>Next shot schedule countdown, medication name, and site rotation recommendation.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/02_wear_quick_actions.png" alt="Quick Actions" /></div>
+        <h4>Quick Actions</h4>
+        <p>1-tap shot logging, rapid hydration chip, and quick weight entry.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/03_wear_dose_stepper.png" alt="Dose Stepper" /></div>
+        <h4>Dose Stepper</h4>
+        <p>Glanceable high-contrast OLED typography with responsive stepper buttons.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/04_wear_dose_confirm.png" alt="Site Rotation" /></div>
+        <h4>Site Rotation</h4>
+        <p>Rotate through 6 injection zones and confirm doses in a single tap.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/05_wear_shot_confirmed.png" alt="Haptic Confirmation" /></div>
+        <h4>Haptic Confirmation</h4>
+        <p>Instant visual and tactile checkmark with automatic background phone sync.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/06_wear_water_logged.png" alt="Water Intake" /></div>
+        <h4>1-Tap Hydration</h4>
+        <p>Log 250 mL water intake on the fly to combat GI side effects and hit daily goals.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/07_wear_weight_stepper.png" alt="Weight Stepper" /></div>
+        <h4>Weight Logging</h4>
+        <p>Track weigh-ins on wrist in pounds or kilograms with quick-adjust steppers.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/08_wear_weight_saved.png" alt="Weight Saved" /></div>
+        <h4>Durable Sync</h4>
+        <p>Works completely offline with automatic Google Wearable Data Layer sync.</p>
+      </div>
     </div>
   </div>
 </section>
