@@ -22,3 +22,5 @@ dependencyResolutionManagement {
 rootProject.name = "Dosely"
 include(":app")
 include(":hartmann-crosspromo")
+include(":sync")
+include(":wear")

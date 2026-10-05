@@ -55,10 +55,13 @@ import java.time.format.FormatStyle
 fun DosesScreen(viewModel: DosesViewModel = koinViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var showLogDialog by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<InjectionEntity?>(null) }
     var showSkipDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<InjectionEntity?>(null) }
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+        Column {
         Spacer(Modifier.height(12.dp))
         Text(S("doses_title"), style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(4.dp))
@@ -69,6 +72,8 @@ fun DosesScreen(viewModel: DosesViewModel = koinViewModel()) {
         )
         Spacer(Modifier.height(12.dp))
 
+        DosePlanCard()
+        Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { showLogDialog = true }, modifier = Modifier.weight(2f)) {
                 Text(S("doses_log_new"))
@@ -81,22 +86,25 @@ fun DosesScreen(viewModel: DosesViewModel = koinViewModel()) {
         }
         Spacer(Modifier.height(12.dp))
 
+        }
+        }
         if (ui.entries.isEmpty()) {
+            item {
             EmptyState(
                 icon = Icons.Outlined.Medication,
                 title = S("doses_title"),
                 body = S("doses_empty"),
             )
+            }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(ui.entries, key = { it.id }) { entry ->
                     DoseRow(
                         entry = entry,
                         onDelete = { pendingDelete = entry },
+                        onEdit = { editing = entry; showLogDialog = true },
                     )
                 }
                 item { Spacer(Modifier.height(24.dp)) }
-            }
         }
     }
 
@@ -104,10 +112,13 @@ fun DosesScreen(viewModel: DosesViewModel = koinViewModel()) {
         LogInjectionDialog(
             suggestedMg = ui.suggestedDoseMg,
             availableDoses = ui.availableDoses,
-            onDismiss = { showLogDialog = false },
-            onConfirm = { site, mg, notes ->
-                viewModel.logInjection(site, mg, notes)
+            existing = editing,
+            lastSite = ui.entries.firstOrNull { !it.skipped }?.site,
+            onDismiss = { showLogDialog = false; editing = null },
+            onConfirm = { site, mg, notes, date, time ->
+                viewModel.logInjection(site, mg, notes, date, time, editing)
                 showLogDialog = false
+                editing = null
             },
         )
     }
@@ -149,7 +160,7 @@ fun DosesScreen(viewModel: DosesViewModel = koinViewModel()) {
 }
 
 @Composable
-private fun DoseRow(entry: InjectionEntity, onDelete: () -> Unit) {
+private fun DoseRow(entry: InjectionEntity, onDelete: () -> Unit, onEdit: () -> Unit) {
     val date = LocalDate.ofEpochDay(entry.epochDay)
         .format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
     Surface(
@@ -209,7 +220,7 @@ private fun DoseRow(entry: InjectionEntity, onDelete: () -> Unit) {
                             color = MaterialTheme.colorScheme.surfaceVariant,
                         ) {
                             Text(
-                                S(siteKey(entry.site)),
+                                entry.site,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -226,6 +237,7 @@ private fun DoseRow(entry: InjectionEntity, onDelete: () -> Unit) {
                     )
                 }
             }
+            if (!entry.skipped) TextButton(onClick = onEdit) { Text("Edit") }
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Filled.Delete,
@@ -241,33 +253,37 @@ private fun DoseRow(entry: InjectionEntity, onDelete: () -> Unit) {
 private fun LogInjectionDialog(
     suggestedMg: Double,
     availableDoses: List<Double>,
+    existing: InjectionEntity?,
+    lastSite: String?,
     onDismiss: () -> Unit,
-    onConfirm: (site: String, mg: Double, notes: String) -> Unit,
+    onConfirm: (site: String, mg: Double, notes: String, date: LocalDate, time: java.time.LocalTime) -> Unit,
 ) {
-    var site by remember { mutableStateOf("Abdomen") }
-    var mgText by remember { mutableStateOf("%.2f".format(suggestedMg).trimEnd('0').trimEnd('.')) }
-    var notes by remember { mutableStateOf("") }
+    val sites = com.dosely.sync.WatchContract.sites
+    var site by remember { mutableStateOf(existing?.site ?: sites[(sites.indexOf(lastSite) + 1) % sites.size]) }
+    var mgText by remember { mutableStateOf((existing?.doseMg ?: suggestedMg).toString()) }
+    var notes by remember { mutableStateOf(existing?.notes.orEmpty()) }
+    var dateText by remember { mutableStateOf(existing?.let { LocalDate.ofEpochDay(it.epochDay).toString() } ?: LocalDate.now().toString()) }
+    var timeText by remember { mutableStateOf((existing?.let { java.time.Instant.ofEpochMilli(it.takenAtMillis).atZone(java.time.ZoneId.systemDefault()).toLocalTime() } ?: java.time.LocalTime.now()).format(DateTimeFormatter.ofPattern("HH:mm"))) }
+    val date = runCatching { LocalDate.parse(dateText) }.getOrNull()
+    val time = runCatching { java.time.LocalTime.parse(timeText) }.getOrNull()
+    val mg = mgText.replace(',', '.').toDoubleOrNull()
+    val valid = date != null && date.year >= 2000 && !date.isAfter(LocalDate.now()) && time != null &&
+        !date.atTime(time).isAfter(java.time.LocalDateTime.now()) && mg != null && mg.isFinite() && mg > 0 && mg <= 100
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(S("doses_log_new")) },
+        title = { Text(if (existing == null) "Record a shot" else "Edit shot") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("Enter the dose you actually took. Follow your prescribed treatment plan.", style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(dateText, { dateText = it }, label = { Text("Date · YYYY-MM-DD") }, singleLine = true)
+                OutlinedTextField(timeText, { timeText = it }, label = { Text("Time · HH:mm") }, singleLine = true)
+                Spacer(Modifier.height(10.dp))
+                if (lastSite != null) Text("Last site: $lastSite", style = MaterialTheme.typography.bodySmall)
                 Text(S("doses_site"), style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(
-                        "Abdomen" to "doses_site_abdomen",
-                        "Thigh" to "doses_site_thigh",
-                        "Upper arm" to "doses_site_arm",
-                    ).forEach { (value, key) ->
-                        Chip(
-                            text = S(key),
-                            selected = site == value,
-                            onClick = { site = value },
-                        )
-                    }
-                }
+                com.dosely.app.ui.doses.SiteSelector(site) { site = it }
                 if (availableDoses.isNotEmpty()) {
                     Spacer(Modifier.height(14.dp))
                     Text(S("doses_mg"), style = MaterialTheme.typography.titleSmall)
@@ -306,9 +322,8 @@ private fun LogInjectionDialog(
             }
         },
         confirmButton = {
-            Button(onClick = {
-                val mg = mgText.replace(',', '.').toDoubleOrNull() ?: suggestedMg
-                onConfirm(site, mg, notes.trim())
+            Button(enabled = valid, onClick = {
+                onConfirm(site, mg!!, notes.trim(), date!!, time!!)
             }) { Text(S("doses_save")) }
         },
         dismissButton = {

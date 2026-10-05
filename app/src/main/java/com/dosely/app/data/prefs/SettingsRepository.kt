@@ -83,7 +83,7 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setOnboarded(value: Boolean) = edit { it[K.ONBOARDED] = value }
     suspend fun setMed(id: String) = edit { it[K.MED_ID] = id }
-    suspend fun setInterval(days: Int) = edit { it[K.INTERVAL] = days }
+    suspend fun setInterval(days: Int) = edit { it[K.INTERVAL] = days.coerceIn(1, 365) }
     suspend fun setReminderTime(hour: Int, minute: Int) {
         edit {
             it[K.REM_HOUR] = hour
@@ -93,6 +93,15 @@ class SettingsRepository(private val context: Context) {
     }
     suspend fun setFirstDoseDay(epochDay: Long) = edit { it[K.FIRST_DOSE] = epochDay.toString() }
     suspend fun setPens(count: Int) = edit { it[K.PENS] = count }
+    suspend fun adjustPens(delta: Int) = edit { it[K.PENS] = ((it[K.PENS] ?: 2) + delta).coerceAtLeast(0) }
+    /** Atomic inventory adjustment and marker; safe to retry after process death. */
+    suspend fun consumeWatchPenOnce(eventId: String) = edit {
+        val marker = booleanPreferencesKey("watch_stock_$eventId")
+        if (it[marker] != true) {
+            it[K.PENS] = ((it[K.PENS] ?: 2) - 1).coerceAtLeast(0)
+            it[marker] = true
+        }
+    }
     suspend fun setLowStockThreshold(n: Int) = edit { it[K.LOW_STOCK] = n }
     suspend fun setStartWeightGrams(g: Int) = edit { it[K.START_W] = g }
     suspend fun setGoalWeightGrams(g: Int) = edit { it[K.GOAL_W] = g }

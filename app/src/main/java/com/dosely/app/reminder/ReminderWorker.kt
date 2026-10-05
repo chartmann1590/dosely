@@ -44,14 +44,16 @@ class ReminderWorker(
 
         val today = LocalDate.now()
         val injections = repo.injections.first()
-        val next = DoseEngine.nextDose(today, s.intervalDays, s.firstDoseEpochDay, injections)
+        val next = DoseEngine.nextDose(today, s.intervalDays, s.firstDoseEpochDay, injections.filter { it.medId == s.medId })
         val stock = DoseEngine.stockStatus(today, s.pensOnHand, s.lowStockThreshold, s.intervalDays, injections)
         val med = Medications.byId(s.medId)
 
         // Dose reminder
         if (s.remindersEnabled) {
-            val dueToday = next.date == today || next.overdue
-            val alreadyTaken = injections.any { it.epochDay == today.toEpochDay() && !it.skipped }
+            val plans = com.dosely.app.data.db.DoselyDb.get(ctx).journalDao().observePlans().first()
+            val plannedToday = plans.any { it.epochDay == today.toEpochDay() }
+            val dueToday = next.date == today || next.overdue || plannedToday
+            val alreadyTaken = injections.any { it.epochDay == today.toEpochDay() && !it.skipped && it.medId == s.medId }
             if (dueToday && !alreadyTaken && Notifications.canNotify(ctx)) {
                 Notifications.post(
                     ctx, Notifications.CHANNEL_DOSE, ID_DOSE,

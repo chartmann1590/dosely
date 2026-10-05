@@ -43,3 +43,32 @@ data class ChatMessageEntity(
     val text: String,
     val createdAtMillis: Long,
 )
+
+@Entity(tableName = "journal_entries")
+data class JournalEntity(
+    @PrimaryKey val id: String = java.util.UUID.randomUUID().toString(),
+    val epochDay: Long,
+    val loggedAtMillis: Long,
+    val symptom: String = "",
+    val severity: Int = 0,
+    val waterMl: Int = 0,
+    val calories: Int = 0,
+    val proteinGrams: Int = 0,
+    val appetite: Int = 0,
+    val foodNoise: Int = 0,
+    val notes: String = "",
+    val photoUri: String = "",
+)
+
+/** Receipts are retained even if the user later deletes an imported entry. */
+@Entity(tableName = "watch_receipts")
+data class WatchReceipt(@PrimaryKey val id: String, val receivedAt: Long)
+
+@Entity(tableName = "dose_plans")
+data class DosePlanEntity(
+    @PrimaryKey val id: String = java.util.UUID.randomUUID().toString(),
+    val epochDay: Long,
+    val medId: String,
+    val doseMg: Double,
+    val notes: String = "",
+)

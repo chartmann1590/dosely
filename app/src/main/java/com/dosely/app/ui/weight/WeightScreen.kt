@@ -54,6 +54,7 @@ import java.time.format.FormatStyle
 fun WeightScreen(viewModel: WeightViewModel = koinViewModel()) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     var showLogDialog by remember { mutableStateOf(false) }
+    var days by remember { mutableStateOf(30) }
 
     LazyColumn(
         Modifier
@@ -66,6 +67,24 @@ fun WeightScreen(viewModel: WeightViewModel = koinViewModel()) {
             Text(S("weight_title"), style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
         }
+
+        item {
+            com.dosely.app.ui.components.SectionCard {
+                Text("See the bigger picture", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(30, 90, 0).forEach { period ->
+                        androidx.compose.material3.FilterChip(selected = days == period, onClick = { days = period },
+                            label = { Text(if (period == 0) "All" else "${period}d") })
+                    }
+                }
+                val points = ui.entries.filter { days == 0 || it.epochDay >= LocalDate.now().minusDays(days.toLong()).toEpochDay() }
+                if (points.isEmpty()) Text("Log a weigh-in to start your chart.")
+                else com.dosely.app.ui.components.TrendChart(points.map { it.grams / 1000.0 }, "Weight trend for the selected period")
+                Text("Your trend matters more than any single day.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item { com.dosely.app.ui.journal.JourneyInsights() }
+        item { com.dosely.app.export.ExportCard() }
 
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -231,7 +250,7 @@ private fun LogWeightDialog(
             )
         },
         confirmButton = {
-            Button(onClick = {
+            Button(enabled = text.replace(',', '.').toDoubleOrNull()?.let { Units.toKg(it, imperial) in 20.0..500.0 } == true, onClick = {
                 text.replace(',', '.').toDoubleOrNull()?.let { onConfirm(Units.toKg(it, imperial)) }
             }) { Text(S("common_save")) }
         },

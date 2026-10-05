@@ -23,6 +23,7 @@ TRANSLATIONS_CSV = r"H:\med-tracker\store_assets\listing\dosely_play_listing_tra
 ICON_PATH = r"H:\med-tracker\store_assets\icons\icon_512.png"
 FEATURE_PATH = r"H:\med-tracker\store_assets\feature\feature_1024x500.png"
 SCREENSHOTS_DIR = r"H:\med-tracker\store_assets\screenshots"
+WEAR_SCREENSHOTS_DIR = r"H:\med-tracker\store_assets\wear_screenshots"
 
 # Mapping from CSV language code to Google Play supported language codes
 LANG_MAP = {
@@ -166,6 +167,33 @@ def main():
             except Exception as e:
                 print(f"  [FAIL] Screenshot {filename}: {e}")
 
+        # Wear OS Screenshots
+        if os.path.exists(WEAR_SCREENSHOTS_DIR):
+            try:
+                service.edits().images().deleteall(
+                    packageName=PACKAGE_NAME,
+                    editId=edit_id,
+                    language="en-US",
+                    imageType="wearScreenshots"
+                ).execute()
+            except Exception:
+                pass
+
+            wear_shots = sorted(glob.glob(os.path.join(WEAR_SCREENSHOTS_DIR, "*.png")))
+            for ws in wear_shots:
+                filename = os.path.basename(ws)
+                try:
+                    wshot_res = service.edits().images().upload(
+                        packageName=PACKAGE_NAME,
+                        editId=edit_id,
+                        language="en-US",
+                        imageType="wearScreenshots",
+                        media_body=MediaFileUpload(ws, mimetype="image/png")
+                    ).execute()
+                    print(f"  [OK] Wear Screenshot {filename} (ID: {wshot_res.get('image', {}).get('id')})")
+                except Exception as e:
+                    print(f"  [FAIL] Wear Screenshot {filename}: {e}")
+
         # 4. Upload Signed Release Bundle
         print("\n--- 4. Release Bundle (AAB) Upload ---")
         media = MediaFileUpload(AAB_PATH, mimetype="application/octet-stream", resumable=True)
@@ -187,12 +215,12 @@ def main():
         track_body = {
             "track": "internal",
             "releases": [{
-                "name": f"1.0.0 ({version_code})",
+                "name": f"1.1.0 ({version_code})",
                 "versionCodes": [str(version_code)],
                 "status": "completed",
                 "releaseNotes": [{
                     "language": "en-US",
-                    "text": "Initial release of Dosely - GLP-1 & dose tracker with on-device AI coach."
+                    "text": "GLP-1 companion update: Pharmacokinetic decay curves, 6-site injection rotation, daily hydration & protein care, Wear OS companion, and Dosely+ ad-free subscription."
                 }]
             }]
         }

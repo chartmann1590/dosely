@@ -72,6 +72,7 @@ object Routes {
     const val CALENDAR = "calendar"
     const val COACH = "coach"
     const val SETTINGS = "settings"
+    const val JOURNAL = "journal"
     const val LEGAL_TOS = "legal/tos"
     const val LEGAL_PRIVACY = "legal/privacy"
 }
@@ -86,9 +87,8 @@ private data class Tab(
 private val tabs = listOf(
     Tab(Routes.HOME, "nav_home", Icons.Outlined.Home, Icons.Filled.Home),
     Tab(Routes.DOSES, "nav_doses", Icons.Outlined.Medication, Icons.Filled.Medication),
-    Tab(Routes.CALENDAR, "nav_calendar", Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth),
+    Tab(Routes.JOURNAL, "Journal", Icons.Outlined.CalendarMonth, Icons.Filled.CalendarMonth),
     Tab(Routes.WEIGHT, "nav_weight", Icons.Outlined.MonitorWeight, Icons.Filled.MonitorWeight),
-    Tab(Routes.COACH, "nav_coach", Icons.Outlined.SelfImprovement, Icons.Filled.SelfImprovement),
     Tab(Routes.SETTINGS, "nav_settings", Icons.Outlined.Settings, Icons.Filled.Settings),
 )
 
@@ -97,10 +97,12 @@ fun AppRoot(appViewModel: AppViewModel = koinViewModel(), initialRoute: String? 
     val settings by appViewModel.settings.collectAsStateWithLifecycle()
     val mode = ThemeMode.from(settings?.themeMode ?: "system")
     val context = LocalContext.current
+    val subscription by com.dosely.app.billing.SubscriptionManager.get(context).state.collectAsStateWithLifecycle()
 
     var adsReady by remember { mutableStateOf(AdsManager.get(context).canRequestAds) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(subscription.adFree) {
+        if (subscription.adFree == true) return@LaunchedEffect
         val activity = context as? android.app.Activity ?: return@LaunchedEffect
         AdsManager.get(context).gatherConsent(activity) { _ ->
             adsReady = AdsManager.get(context).canRequestAds
@@ -111,7 +113,7 @@ fun AppRoot(appViewModel: AppViewModel = koinViewModel(), initialRoute: String? 
         when {
             settings == null -> Box(Modifier.fillMaxSize())
             !settings!!.onboarded -> OnboardingFlow()
-            else -> MainScaffold(appViewModel, initialRoute, adsReady)
+            else -> MainScaffold(appViewModel, initialRoute, adsReady && subscription.adFree == false)
         }
     }
 }
@@ -123,8 +125,8 @@ private fun MainScaffold(appViewModel: AppViewModel, initialRoute: String?, adsR
     val currentRoute = backStack?.destination?.route
 
     LaunchedEffect(initialRoute) {
-        if (initialRoute != null && tabs.any { it.route == initialRoute }) {
-            navController.navigate(initialRoute) { launchSingleTop = true }
+        if (initialRoute in setOf(Routes.HOME, Routes.DOSES, Routes.CALENDAR, Routes.WEIGHT, Routes.COACH, Routes.SETTINGS, Routes.JOURNAL)) {
+            navController.navigate(initialRoute!!) { launchSingleTop = true }
         }
     }
 
@@ -197,9 +199,13 @@ private fun MainScaffold(appViewModel: AppViewModel, initialRoute: String?, adsR
                         appViewModel = appViewModel,
                         onNavigateToCoach = { navController.navigate(Routes.COACH) },
                         onNavigateToDoses = { navController.navigate(Routes.DOSES) },
+                        onNavigateToJournal = { navController.navigate(Routes.JOURNAL) },
+                        onNavigateToWeight = { navController.navigate(Routes.WEIGHT) },
+                        onNavigateToCalendar = { navController.navigate(Routes.CALENDAR) },
                     )
                 }
                 composable(Routes.DOSES) { DosesScreen() }
+                composable(Routes.JOURNAL) { com.dosely.app.ui.journal.JournalScreen() }
                 composable(Routes.CALENDAR) { CalendarScreen() }
                 composable(Routes.WEIGHT) { WeightScreen() }
                 composable(Routes.COACH) { CoachScreen() }

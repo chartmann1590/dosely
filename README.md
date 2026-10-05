@@ -32,11 +32,15 @@ doesn't**:
 
 | | |
 |---|---|
-| 💉 **Injection tracking** | Log doses in seconds — medication, mg, injection site, notes. Titration-aware schedule suggestions. |
+| 💉 **Injection tracking & 6-site rotation** | Log doses in seconds — medication, mg, injection site, notes. 6-site visual rotation prevents tissue fatigue and soreness. |
+| 📈 **Medication levels & decay curves** | Smooth cubic Bézier pharmacokinetic curves model estimated circulating levels and 7-day half-life elimination. |
+| 💧 **Daily care: water & protein** | 1-tap quick logging for hydration (+250 mL / +500 mL) and protein (+20 g / +30 g) to combat GI side effects. |
+| ⌚ **Wear OS smartwatch companion** | Standalone wrist app with rotary input, 1-tap shot confirmation, quick hydration logging, and weight steppers. |
+| 💎 **Dosely+ ad-free ($0.99 / mo)** | Optional auto-renewing Google Play subscription to remove all banner ads while keeping data 100% private. |
 | 🖊️ **Pen stock & re-up alerts** | A pen is deducted per injection. Low-stock and out-of-stock warnings arrive **before** you run dry. |
-| ⚖️ **Weight journey** | Start weight, goal, total change, 7-day average, trend chart — in **kg or lb**. |
+| ⚖️ **Weight journey** | Start weight, goal, total change, 7-day average, trend chart — in **kg or lb** with Health Connect support. |
 | 📅 **Calendar & insights** | Month view of doses, skips and weigh-ins. Streaks, adherence, projected goal date. |
-| 🤖 **On-device AI coach** | Google's Gemma 4 model runs **fully offline** on your phone. Ask about nausea, nutrition, titration, habits. Nothing is uploaded — ever. |
+| 🤖 **On-device AI coach** | Google's Gemma model runs **fully offline** on your phone. Ask about nausea, nutrition, titration, habits. |
 | 🌍 **59 languages** | The entire app translates **on device** via Google ML Kit. No server round-trips. |
 | 🔔 **Reminders** | Dose reminders, refill nudges, weekly weigh-in prompts. |
 | 📱 **Home-screen widget** | Next dose, pen stock and latest weight at a glance. |
@@ -44,13 +48,23 @@ doesn't**:
 
 ## 📸 See it in action
 
-| Home | Doses | Calendar & insights |
+### Mobile App
+| Home & Active Level | Doses & Rotation | Calendar & Insights |
 |---|---|---|
 | ![Home](store_assets/screenshots/01_home.png) | ![Doses](store_assets/screenshots/02_doses.png) | ![Calendar](store_assets/screenshots/03_calendar.png) |
 
-| Weight | AI Coach | Settings |
+| Weight Journey | AI Coach (Offline) | Settings & Subscriptions |
 |---|---|---|
 | ![Weight](store_assets/screenshots/04_weight.png) | ![Coach](store_assets/screenshots/05_coach.png) | ![Settings](store_assets/screenshots/06_settings.png) |
+
+### ⌚ Wear OS Smartwatch Companion
+| Active Routine | Quick Actions | Dose Stepper | Site Rotation |
+|:---:|:---:|:---:|:---:|
+| <img src="store_assets/wear_screenshots/01_wear_dashboard_hero.png" width="160" /> | <img src="store_assets/wear_screenshots/02_wear_quick_actions.png" width="160" /> | <img src="store_assets/wear_screenshots/03_wear_dose_stepper.png" width="160" /> | <img src="store_assets/wear_screenshots/04_wear_dose_confirm.png" width="160" /> |
+
+| Instant Confirmation | 1-Tap Hydration | Weight Stepper | Weight Saved |
+|:---:|:---:|:---:|:---:|
+| <img src="store_assets/wear_screenshots/05_wear_shot_confirmed.png" width="160" /> | <img src="store_assets/wear_screenshots/06_wear_water_logged.png" width="160" /> | <img src="store_assets/wear_screenshots/07_wear_weight_stepper.png" width="160" /> | <img src="store_assets/wear_screenshots/08_wear_weight_saved.png" width="160" /> |
 
 ▶️ **Promo video:** [`store_assets/video/dosely_promo.mp4`](store_assets/video/dosely_promo.mp4)
 
@@ -92,11 +106,15 @@ hosting, translation packs testing and the Play developer account.
 - [x] On-device Gemma AI coach
 - [x] On-device translation (59 languages)
 - [x] Calendar insights, widget, reminders
-- [x] Google Play compliance (consent, legal, reporting)
-- [ ] **Google Play release** ← we are here
+- [x] Pharmacokinetic decay curves & 6-site injection rotation
+- [x] Daily GLP-1 Care (hydration & protein tracking)
+- [x] Standalone & Companion Wear OS app (`:wear` on `wear:internal`)
+- [x] Dosely+ $0.99/mo subscription (`dosely_ad_free` on Google Play)
+- [x] Google Play Internal Testing release (Phone v1.1.0 build 2, Wear v1.1.0 build 3)
+- [ ] **Google Play Open Testing & Production release** ← next milestone
 - [ ] iOS version (evaluating)
 - [ ] Export/backup & restore
-- [ ] Wear OS complication
+- [ ] Wear OS watch face complication
 
 ## 🧑‍💻 For developers
 

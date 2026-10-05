@@ -16,6 +16,10 @@ object Units {
     fun toKg(value: Double, imperial: Boolean): Double =
         if (imperial) value / LB_PER_KG else value
 
+    /** Formats a canonical kg value without unit for input editing, e.g. "209.8". */
+    fun formatValue(kg: Double, imperial: Boolean): String =
+        String.format(Locale.US, "%.1f", fromKg(kg, imperial))
+
     /** Formats a canonical kg value for display, e.g. "209.8 lb" or "95.2 kg". */
     fun format(kg: Double?, imperial: Boolean): String {
         if (kg == null) return "—"

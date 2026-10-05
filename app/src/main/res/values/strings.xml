@@ -298,6 +298,6 @@
     <!-- ============ Legal ============ -->
     <string name="legal_tos_title">Terms of Service</string>
     <string name="legal_privacy_title">Privacy Policy</string>
-    <string name="legal_last_updated">Last updated: September 28, 2026</string>
+    <string name="legal_last_updated">Last updated: October 5, 2026</string>
     <string name="legal_back">Back</string>
 </resources>

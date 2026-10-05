@@ -47,3 +47,5 @@ cloudflare/feedback-worker/node_modules/
 *service*account*.json
 play-*.json
 *.service-account.json
+/build-*.log
+/emulator-test*.log

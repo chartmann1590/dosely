@@ -149,6 +149,19 @@
     padding: 5px 13px; border-radius: 999px; font-size: .84rem;
   }
 
+  /* wear os showcase */
+  .wear-grid { margin-top: 44px; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 26px; }
+  .wear-card { text-align: center; background: #0F2622; border-radius: 24px; padding: 24px 16px 20px; border: 1px solid rgba(78,216,176,0.18); transition: transform .2s ease, box-shadow .2s ease; }
+  .wear-card:hover { transform: translateY(-6px); box-shadow: 0 16px 36px rgba(0,0,0,0.5); }
+  .watch-bezel {
+    width: 170px; height: 170px; margin: 0 auto 16px; border-radius: 50%;
+    background: #05110F; border: 7px solid #1A3D36; box-shadow: 0 12px 30px rgba(0,0,0,0.7), inset 0 0 12px rgba(0,0,0,0.9);
+    overflow: hidden; display: flex; align-items: center; justify-content: center;
+  }
+  .watch-bezel img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+  .wear-card h4 { color: #4ED8B0; font-size: 1.05rem; margin-bottom: 6px; }
+  .wear-card p { color: #90B5AC; font-size: .84rem; line-height: 1.4; margin: 0; }
+
   /* roadmap */
   .timeline { margin-top: 36px; border-left: 2px solid rgba(62,207,116,.4); padding-left: 26px; display: grid; gap: 22px; }
   .tl-item { position: relative; }
@@ -189,6 +202,7 @@
 <nav>
   <a class="brand" href="#"><img src="assets/icon.png" alt="Dosely" /> Dosely</a>
   <a class="link" href="#features">Features</a>
+  <a class="link" href="#wear">Wear OS</a>
   <a class="link" href="#screens">Screens</a>
   <a class="link" href="#privacy">Privacy</a>
   <a class="link" href="#roadmap">Roadmap</a>
@@ -223,20 +237,26 @@
     <p class="lede">Dosely was built for real GLP-1 routines — from titration schedules to
     running low on pens the week before your next dose.</p>
     <div class="grid">
-      <div class="card"><div class="emoji">💉</div><h3>Injection tracking</h3>
-        <p>Log doses in seconds — medication, mg, site and notes. Titration-aware schedule suggestions for semaglutide, tirzepatide, dulaglutide, liraglutide and CagriSema.</p></div>
+      <div class="card"><div class="emoji">💉</div><h3>Injection tracking &amp; 6-Site Rotation</h3>
+        <p>Log doses in seconds — medication, mg, site and notes. Smart 6-site visual rotation across left/right abdomen, thigh, and upper arm prevents tissue fatigue and soreness.</p></div>
+      <div class="card"><div class="emoji">📈</div><h3>Medication Levels &amp; Decay Curves</h3>
+        <p>Smooth cubic Bézier elimination curves model your estimated active medication in body across the 7-day half-life cycle so you can anticipate peak effectiveness.</p></div>
+      <div class="card"><div class="emoji">💧</div><h3>Daily GLP-1 Care: Water &amp; Protein</h3>
+        <p>Prioritize lean protein (+20g/+30g) and hydration (+250mL/+500mL) with 1-tap quick logging to stay energized and manage GI side effects.</p></div>
+      <div class="card"><div class="emoji">⌚</div><h3>Android Wear OS Companion</h3>
+        <p>Finished on-wrist companion: check your next shot, log doses with site rotation, record weights, and track hydration from your smartwatch with offline queueing.</p></div>
+      <div class="card"><div class="emoji">💎</div><h3>Dosely+ Ad-Free ($0.99 / mo)</h3>
+        <p>Optional auto-renewing subscription removes all banner ads for just 99¢/month while keeping all health data 100% private and on your device.</p></div>
       <div class="card"><div class="emoji">🖊️</div><h3>Pen stock &amp; re-up alerts</h3>
         <p>A pen is deducted per injection. Low-stock and out-of-stock warnings arrive before you run dry, with refill reminders timed to your interval.</p></div>
       <div class="card"><div class="emoji">⚖️</div><h3>Weight journey</h3>
-        <p>Start weight, goal, total change and a 7-day average — in kilograms or pounds, switchable anytime.</p></div>
-      <div class="card"><div class="emoji">📅</div><h3>Calendar &amp; insights</h3>
-        <p>A month view of doses, skips and weigh-ins with streaks, adherence and a projected goal date based on your own trend.</p></div>
+        <p>Start weight, goal, total change, 7-day average, and Health Connect import — in kilograms or pounds, switchable anytime.</p></div>
       <div class="card"><div class="emoji">🤖</div><h3>On-device AI coach</h3>
-        <p>Google's Gemma 4 runs fully offline on your phone. Ask about nausea, nutrition, titration and habits — nothing is ever uploaded. Clearly labeled as AI, with one-tap reporting.</p></div>
+        <p>Google's Gemma runs fully offline on your phone. Ask about nausea, nutrition, titration and habits — nothing is ever uploaded to cloud servers.</p></div>
       <div class="card"><div class="emoji">🌍</div><h3>59 languages, on device</h3>
         <p>The whole app translates itself using Google ML Kit — no server round-trips, works offline, remembers your choice.</p></div>
       <div class="card"><div class="emoji">🔔</div><h3>Gentle reminders</h3>
-        <p>Dose reminders, refill nudges and a weekly weigh-in prompt — delivered locally, never through someone's server.</p></div>
+        <p>Dose reminders, refill nudges and a weekly weigh-in prompt — delivered locally on device, never through external servers.</p></div>
       <div class="card"><div class="emoji">📱</div><h3>Home-screen widget</h3>
         <p>Your next dose, pen stock and latest weight at a glance, refreshed automatically.</p></div>
     </div>
@@ -253,6 +273,57 @@
         <source src="assets/dosely_promo.mp4" type="video/mp4" />
         Your browser doesn't support embedded video.
       </video>
+    </div>
+  </div>
+</section>
+
+<section id="wear" style="background:#05110F; color:#E8F5F2; padding: 80px 6vw;">
+  <div class="wrap">
+    <span class="kicker" style="color:var(--mint);">On Your Wrist</span>
+    <h2 style="color:#E8F5F2;">Wear OS Smartwatch Companion</h2>
+    <p class="lede" style="color:#A0C8BC;">Full standalone wrist support — glance at your active routine, confirm injections with smart 6-site rotation, tap 1-tap hydration (+250 mL), and log weights from your smartwatch with durable offline queueing.</p>
+    
+    <div class="wear-grid">
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/01_wear_dashboard_hero.png" alt="Hero Dashboard" /></div>
+        <h4>Active Routine</h4>
+        <p>Next shot schedule countdown, medication name, and site rotation recommendation.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/02_wear_quick_actions.png" alt="Quick Actions" /></div>
+        <h4>Quick Actions</h4>
+        <p>1-tap shot logging, rapid hydration chip, and quick weight entry.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/03_wear_dose_stepper.png" alt="Dose Stepper" /></div>
+        <h4>Dose Stepper</h4>
+        <p>Glanceable high-contrast OLED typography with responsive stepper buttons.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/04_wear_dose_confirm.png" alt="Site Rotation" /></div>
+        <h4>Site Rotation</h4>
+        <p>Rotate through 6 injection zones and confirm doses in a single tap.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/05_wear_shot_confirmed.png" alt="Haptic Confirmation" /></div>
+        <h4>Haptic Confirmation</h4>
+        <p>Instant visual and tactile checkmark with automatic background phone sync.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/06_wear_water_logged.png" alt="Water Intake" /></div>
+        <h4>1-Tap Hydration</h4>
+        <p>Log 250 mL water intake on the fly to combat GI side effects and hit daily goals.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/07_wear_weight_stepper.png" alt="Weight Stepper" /></div>
+        <h4>Weight Logging</h4>
+        <p>Track weigh-ins on wrist in pounds or kilograms with quick-adjust steppers.</p>
+      </div>
+      <div class="wear-card">
+        <div class="watch-bezel"><img loading="lazy" src="assets/wear/08_wear_weight_saved.png" alt="Weight Saved" /></div>
+        <h4>Durable Sync</h4>
+        <p>Works completely offline with automatic Google Wearable Data Layer sync.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -287,6 +358,8 @@
         <div class="check"><span class="tick">✓</span><span>AI runs offline — prompts never leave the phone</span></div>
         <div class="check"><span class="tick">✓</span><span>No analytics SDK, no crash reporters, no accounts</span></div>
         <div class="check"><span class="tick">✓</span><span>Translate packs run on device too — 59 languages</span></div>
+        <div class="check"><span class="tick">✓</span><span>Wear OS companion syncs directly with phone via Wearable Data Layer</span></div>
+        <div class="check"><span class="tick">✓</span><span>Optional $0.99/mo subscription removes all ads — health records are never sent to ad or billing services</span></div>
         <div class="check"><span class="tick">✓</span><span>Optional ads governed by Google's consent flow, with in-app privacy controls</span></div>
         <div class="check"><span class="tick">✓</span><span>Erase everything with one tap — clear data or uninstall</span></div>
       </div>
@@ -315,12 +388,14 @@
     <span class="kicker">Roadmap</span>
     <h2>Where Dosely is heading</h2>
     <div class="timeline">
-      <div class="tl-item done"><h4>✅ Core tracking</h4><p>Injections, pen stock, weight, calendar insights, widget, reminders.</p></div>
-      <div class="tl-item done"><h4>✅ On-device AI coach</h4><p>Gemma 4 offline, streaming answers, medical disclaimers, in-app reporting.</p></div>
+      <div class="tl-item done"><h4>✅ Core tracking &amp; injection rotation</h4><p>Injections, 6-site visual rotation, pen stock, weight, hydration &amp; protein daily care.</p></div>
+      <div class="tl-item done"><h4>✅ Pharmacokinetic curve modeling</h4><p>Educational half-life decay visualization matching GLP-1 medication curves.</p></div>
+      <div class="tl-item done"><h4>✅ Android Wear OS companion</h4><p>On-wrist shot logging, water counter, and weight steppers with offline queueing.</p></div>
+      <div class="tl-item done"><h4>✅ Dosely+ $0.99/mo Ad-Free</h4><p>Google Play monthly subscription with instant ad removal and on-device privacy.</p></div>
+      <div class="tl-item done"><h4>✅ On-device AI coach</h4><p>Gemma offline, streaming answers, medical disclaimers, in-app reporting.</p></div>
       <div class="tl-item done"><h4>✅ 59-language on-device translation</h4><p>ML Kit powered, persisted, works fully offline.</p></div>
-      <div class="tl-item done"><h4>✅ Google Play compliance</h4><p>Consent flow, legal docs, AI-content reporting, store listing assets.</p></div>
-      <div class="tl-item now"><h4>🚀 Google Play release<span class="now-label">in progress</span></h4><p>Final store review. Watch this repo or the website for the launch announcement.</p></div>
-      <div class="tl-item"><h4>🧭 Next up</h4><p>Export &amp; backup/restore, iOS evaluation, Wear OS complication.</p></div>
+      <div class="tl-item now"><h4>🚀 Google Play internal testing<span class="now-label">active</span></h4><p>Internal testing track live on Google Play Console.</p></div>
+      <div class="tl-item"><h4>🧭 Next up</h4><p>Export &amp; backup/restore, iOS evaluation, Wear OS complications.</p></div>
     </div>
   </div>
 </section>
