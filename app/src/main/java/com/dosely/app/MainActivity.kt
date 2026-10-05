@@ -26,4 +26,10 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
     }
+
+    override fun onResume() {
+        super.onResume()
+        com.dosely.app.billing.SubscriptionManager.get(this).refresh()
+        com.dosely.app.wear.PhoneWatchSync.enqueue(this)
+    }
 }

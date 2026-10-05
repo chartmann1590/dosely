@@ -9,6 +9,7 @@ import com.dosely.app.domain.Medications
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -34,7 +35,7 @@ class DosesViewModel(
     ) { s, injections ->
         val today = LocalDate.now()
         val med = Medications.byId(s.medId)
-        val suggested = Medications.suggestedDose(med, weeksOn(today, s.firstDoseEpochDay))
+        val suggested = injections.firstOrNull { !it.skipped && it.medId == s.medId }?.doseMg ?: med.doses.first()
         val takenToday = injections.any { it.epochDay == today.toEpochDay() && !it.skipped }
         DosesUi(
             loaded = s.onboarded,
@@ -47,27 +48,32 @@ class DosesViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DosesUi())
 
-    fun logInjection(site: String, mg: Double, notes: String) {
+    fun logInjection(site: String, mg: Double, notes: String, date: LocalDate = LocalDate.now(), time: java.time.LocalTime = java.time.LocalTime.now(), existing: InjectionEntity? = null) {
+        if (!mg.isFinite() || mg <= 0 || mg > 100 || date.isAfter(LocalDate.now())) return
         viewModelScope.launch {
-            repo.logInjection(
-                InjectionEntity(
-                    epochDay = LocalDate.now().toEpochDay(),
-                    takenAtMillis = System.currentTimeMillis(),
-                    medId = settingsRepo.current().medId,
+            val entry = InjectionEntity(
+                    id = existing?.id ?: 0,
+                    epochDay = date.toEpochDay(),
+                    takenAtMillis = date.atTime(time).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli(),
+                    medId = existing?.medId ?: settingsRepo.current().medId,
                     doseMg = mg,
                     site = site,
                     notes = notes,
-                ),
-            )
+                )
+            if (existing == null) repo.logInjection(entry) else repo.updateInjection(entry)
         }
     }
 
     fun skipToday() {
         viewModelScope.launch {
             val today = LocalDate.now()
+            val s = settingsRepo.current()
+            val history = repo.injections.first()
+            val due = com.dosely.app.domain.DoseEngine.nextDose(today, s.intervalDays, s.firstDoseEpochDay,
+                history.filter { it.medId == s.medId }).date.coerceAtMost(today)
             repo.logInjection(
                 InjectionEntity(
-                    epochDay = today.toEpochDay(),
+                    epochDay = due.toEpochDay(),
                     takenAtMillis = System.currentTimeMillis(),
                     medId = settingsRepo.current().medId,
                     doseMg = 0.0,

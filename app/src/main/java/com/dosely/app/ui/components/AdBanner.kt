@@ -39,7 +39,10 @@ fun AdBanner(
     }
 
     DisposableEffect(adView) {
-        adView.loadAd(AdRequest.Builder().build())
+        adView.loadAd(AdRequest.Builder().addNetworkExtrasBundle(
+            com.google.ads.mediation.admob.AdMobAdapter::class.java,
+            android.os.Bundle().apply { putString("npa", "1") },
+        ).build())
         onDispose {
             adView.destroy()
         }

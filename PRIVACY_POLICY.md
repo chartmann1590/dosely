@@ -1,16 +1,42 @@
 # Privacy Policy
 
-**Last updated: September 30, 2026**
+**Last updated: October 5, 2026**
 
 This Privacy Policy describes how the Dosely Android application (the "App") handles
 your information. It is provided by Charles Hartmann ("we", "us").
 
 ## Overview
 
-Dosely is built privacy-first. Your health tracking data (injections, doses, weight
-entries, notes, and AI coach chats) is stored only on your device, in the app's private
-storage. We do not collect, transmit, or sell this data. There is no account, no cloud
-sync, and no analytics SDK.
+Your health tracking data is kept in Dosely's private on-device database. Optional
+Wear OS synchronization transfers selected tracking data to your paired devices,
+and exports save a report to a destination you choose. We do not sell health data
+or use it for advertising. There is no Dosely cloud account. Android system backup
+and the document provider you choose may store app data or exports in the cloud.
+
+## Health Connect, watch synchronization, and exports
+
+When you choose Import and grant permission, Dosely reads the last 30 days of
+weight records from Health Connect. Newer measurements for a day are imported
+into the local database. It does not write to Health Connect. You can revoke access
+in Health Connect settings. Imported health records are never sent to advertising
+or billing services or used to target ads.
+
+The Wear OS companion exchanges medication settings, latest weight, shot logs,
+and water logs with your paired phone through Google's Wear OS Data Layer.
+Bluetooth is used when available; Wi-Fi or Google's transport infrastructure may
+also be used. Pending entries are stored on the watch until the phone acknowledges
+them. Clearing watch storage before synchronization can lose pending logs.
+
+Progress photo attachments use read access to images you select. PDF and CSV
+exports contain health information and are saved only to a location you choose.
+Photos are not included in reports.
+
+## Optional ad-free subscription
+
+Google Play processes purchases of the monthly ad-free subscription. Dosely queries
+and caches subscription status to control advertising. Health records are not sent
+to Google Play Billing. Manage or cancel a subscription in Google Play. Cancellation
+does not itself erase your health records.
 
 ## Data we store on your device
 
@@ -18,6 +44,10 @@ sync, and no analytics SDK.
 - **Weight entries**: date and value
 - **AI coach chats**: your prompts and the model's answers
 - **Settings**: schedule, stock, language, theme preferences
+- **Journal**: symptoms, severity, nutrition, hydration, appetite, food noise, notes,
+  and references to selected photos
+- **Plans and watch receipts**: user-entered upcoming doses and identifiers used to
+  avoid importing a watch log more than once
 
 All of this can be erased with "Clear data" in Android settings or by uninstalling.
 

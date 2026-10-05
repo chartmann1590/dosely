@@ -20,8 +20,8 @@ val keystoreKeyPassword = System.getenv("KEY_PASSWORD")
     ?: project.findProperty("key.password") as? String
 val hasReleaseKeystore = keystoreFilePath != null && file(keystoreFilePath).exists()
 
-val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
-val ciVersionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 2
+val ciVersionName = System.getenv("VERSION_NAME") ?: "1.1.0"
 
 android {
     namespace = "com.dosely.app"
@@ -34,6 +34,7 @@ android {
         versionCode = ciVersionCode
         versionName = ciVersionName
         vectorDrawables { useSupportLibrary = true }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // AdMob IDs are injected from environment/CI secrets and are NEVER
         // committed to this repository. Local and debug builds fall back to
@@ -88,6 +89,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "ADMOB_BANNER_UNIT_ID", "\"ca-app-pub-3940256099942544/9214589741\"")
+            buildConfigField("String", "ADMOB_INTERSTITIAL_UNIT_ID", "\"ca-app-pub-3940256099942544/1033173712\"")
+            manifestPlaceholders["admobApplicationId"] = "ca-app-pub-3940256099942544~3347511713"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -114,6 +120,14 @@ kotlin {
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
+    implementation(project(":sync"))
+    implementation(libs.play.services.wearable)
+    implementation(libs.play.billing)
+    implementation(libs.health.connect)
+    testImplementation(libs.junit)
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:core:1.7.0")
     implementation(project(":hartmann-crosspromo"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)

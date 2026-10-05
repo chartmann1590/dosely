@@ -35,12 +35,9 @@ object DoseEngine {
         } else {
             LocalDate.ofEpochDay(anchorDay)
         }
-        // Walk forward until we reach today or later.
-        var guard = 0
-        while (candidate.isBefore(today) && guard < 520) {
-            candidate = addIntervals(candidate, intervalDays)
-            guard++
-        }
+        // An unrecorded scheduled dose remains overdue until logged or skipped.
+        val skippedDays = injections.filter { it.skipped }.map { it.epochDay }.toSet()
+        while (candidate.toEpochDay() in skippedDays) candidate = addIntervals(candidate, intervalDays.coerceAtLeast(1))
         return NextDose(
             date = candidate,
             overdue = candidate.isBefore(today),
@@ -54,7 +51,7 @@ object DoseEngine {
             14 -> from.plusWeeks(2)
             28 -> from.plusWeeks(4)
             30 -> from.plusMonths(1)
-            else -> from.plusDays(intervalDays.toLong())
+            else -> from.plusDays(intervalDays.coerceAtLeast(1).toLong())
         }
 
     fun atTime(date: LocalDate, hour: Int, minute: Int, zone: ZoneId): LocalDateTime =

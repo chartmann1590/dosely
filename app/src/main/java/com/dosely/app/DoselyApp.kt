@@ -1,6 +1,7 @@
 package com.dosely.app
 
 import android.app.Application
+import kotlinx.coroutines.launch
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -27,6 +28,15 @@ class DoselyApp : Application() {
         Notifications.ensureChannels(this)
         ReminderWorker.scheduleDaily(this)
         DoselyWidgetReceiver.schedulePeriodicRefresh(this)
+        com.dosely.app.wear.PhoneWatchSync.enqueue(this)
+        val syncScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+        syncScope.launch {
+            val db = getKoin().get<com.dosely.app.data.db.DoselyDb>()
+            kotlinx.coroutines.flow.combine(
+                db.injectionDao().observeAll(), db.weightDao().observeAllAsc(),
+                getKoin().get<com.dosely.app.data.prefs.SettingsRepository>().settings,
+            ) { _, _, _ -> Unit }.collect { com.dosely.app.wear.PhoneWatchSync.enqueue(this@DoselyApp) }
+        }
 
         // Hartmann Studios cross-promotion (dynamic catalog from the backend;
         // fails silently — never affects app functionality).

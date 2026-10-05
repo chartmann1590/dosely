@@ -5,51 +5,70 @@ Validated against Play limits (title ≤ 30, short description ≤ 80, full desc
 ## en-US — English (US)
 
 - **App name**: Dosely: GLP-1 & Dose Tracker (28/30)
-- **Short description** (80/80):
+- **Short description** (75/80):
 ```
-Private GLP-1 injection, pen stock & weight tracking with an on-device AI coach.
+GLP-1 shot & dose tracker, decay curves, Wear OS sync & on-device AI coach.
 ```
-- **Full description** (1673/4000):
+- **Full description** (2840/4000):
 ```text
-Dosely is a private companion for your GLP-1 journey — injections, pen stock, weight and an AI coach, all on your phone.
+Dosely is your private, comprehensive companion for your GLP-1 journey — injection tracking, 6-site rotation, pharmacokinetic medication level curves, daily hydration & protein care, Wear OS smartwatch sync, pen stock, weight, and an offline AI coach.
 
-INJECTION TRACKING
-• Log doses in seconds: medication, dose (mg), injection site and notes
-• Titration-aware schedule suggestions for semaglutide, tirzepatide, dulaglutide, liraglutide and CagriSema
-• Skip missed doses and keep your schedule accurate
+INJECTION TRACKING & 6-SITE ROTATION
+• Log doses in seconds: medication, dose (mg), injection site, and notes
+• Smart 6-site visual injection rotation (abdomen L/R, thigh L/R, upper arm L/R) prevents tissue fatigue and injection soreness
+• Titration-aware schedule suggestions for semaglutide, tirzepatide, dulaglutide, liraglutide, and CagriSema
+• Skip missed doses and adjust dates easily to keep your schedule accurate
+
+ESTIMATED MEDICATION LEVELS & DECAY CURVES
+• Smooth cubic Bézier pharmacokinetic curves model estimated circulating medication levels in your body
+• Visual half-life elimination curves help you understand medication decay over your weekly cycle
+• Clear educational charts with vertical "Today" marker and active mg level
+
+DAILY GLP-1 CARE: WATER & PROTEIN
+• 1-tap quick logging for hydration (+250 mL / +500 mL) and lean protein (+20 g / +30 g)
+• Real-time progress bars keep you on track to meet hydration and nutrition goals to combat GI side effects
+• 1-tap quick symptom check-ins (nausea, fatigue, headache, acid reflux, constipation)
+
+WEAR OS SMARTWATCH COMPANION
+• High-contrast OLED Wear OS wrist companion with durable offline queuing
+• View your next scheduled shot and recommended rotation site right on your wrist
+• 1-tap quick water logging and rapid weight check-ins
+• Seamless background sync with your phone via Google Wearable Data Layer
 
 PEN STOCK & RE-UP REMINDERS
-• A pen is deducted automatically with each injection
+• Automatic pen inventory deduction with each injection
 • Low-stock and out-of-stock alerts before you run dry
-• Refill (re-up) reminders timed to your interval
+• Refill reminders timed to your prescription interval
 
-WEIGHT JOURNEY
-• Start weight, goal and total change at a glance
-• 7-day average and full history
-• Metric (kg) or imperial (lb), changeable anytime
+WEIGHT PROGRESS & HEALTH CONNECT
+• Starting weight, goal, and total change at a glance
+• Smooth trend charts, 7-day moving averages, and full historical log
+• Optional 1-tap weight import from Health Connect (last 30 days)
+• Metric (kg) or imperial (lb), switchable anytime
 
 CALENDAR & INSIGHTS
-• Month view of injections, skips and weigh-ins
-• Streaks, adherence and treatment-day stats
-• Projected goal date based on your own trend
+• Month calendar view of injections, skips, and weigh-ins
+• Adherence rates, streaks, and projected goal dates based on your own trends
 
 ON-DEVICE AI COACH (Gemma)
-• Ask about nausea, nutrition, titration and habits
-• Runs fully offline on your phone — nothing is uploaded
-• Knows your stats for personal, relevant answers
-• Clear "AI, not a doctor" disclaimers; report any answer in one tap
+• Ask questions about nausea management, hydration, protein intake, and habits
+• Runs 100% offline on your phone — prompts and personal stats never leave your device
+• Clear medical disclaimers and 1-tap message reporting
+
+DOSELY+ AD-FREE ($0.99 / MONTH)
+• Optional auto-renewing subscription removes all banner ads
+• Uninterrupted, distraction-free GLP-1 tracking experience
+• Manage or cancel anytime directly in Google Play Subscriptions
 
 PRIVATE BY DESIGN
-• No account, no cloud sync, no analytics
-• Health data never leaves your device
-• On-device translation in 59 languages
+• No user account required, no third-party cloud servers, no analytics SDKs
+• Your health data stays in your phone's private storage
+• On-device translations across 59 languages
 
-HOME-SCREEN WIDGET
-• Next dose, pen stock and latest weight at a glance
+MEDICAL DISCLAIMER
+Dosely is a personal tracking utility, NOT a medical device. It does not provide medical advice, diagnosis, or treatment. Pharmacokinetic curves are simplified educational estimates based on published half-life values, not direct blood tests. Always follow your prescribing healthcare provider's instructions regarding your medication and health.
 
-Dosely is a tracking utility, not a medical device. It does not provide medical advice, diagnosis or treatment. The AI coach is an automated language model and can make mistakes — always consult a qualified healthcare professional about your medication and health.
-
-Download Dosely free and take control of your GLP-1 journey today.
+Download Dosely today to take control of your GLP-1 journey!
 ```
 
 ## de-DE — German

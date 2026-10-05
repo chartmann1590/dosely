@@ -34,6 +34,16 @@ data class HomeUi(
     val useImperial: Boolean = false,
     val streak: Int = 0,
     val adherencePct: Int = 100,
+    val injections: List<InjectionEntity> = emptyList(),
+    val weights: List<WeightEntryEntity> = emptyList(),
+    val medId: String = "",
+    val waterMlToday: Int = 0,
+    val proteinGramsToday: Int = 0,
+    val recentSymptoms: List<String> = emptyList(),
+    val lastSite: String = "",
+    val nextSuggestedSite: String = "Abdomen · left",
+    val daysUntilNextDose: Long? = null,
+    val currentDoseMg: Double? = null,
 )
 
 class HomeViewModel(
@@ -45,16 +55,34 @@ class HomeViewModel(
         settingsRepo.settings,
         repo.injections,
         repo.weights,
-    ) { s, injections, weights ->
+        repo.journalEntries,
+    ) { s, injections, weights, journal ->
         if (!s.onboarded) return@combine HomeUi(loaded = false)
         val today = LocalDate.now()
+        val todayEpoch = today.toEpochDay()
         val med = Medications.byId(s.medId)
-        val next = DoseEngine.nextDose(today, s.intervalDays, s.firstDoseEpochDay, injections)
+        val next = DoseEngine.nextDose(today, s.intervalDays, s.firstDoseEpochDay, injections.filter { it.medId == s.medId })
         val stock = DoseEngine.stockStatus(today, s.pensOnHand, s.lowStockThreshold, s.intervalDays, injections)
         val current = weights.lastOrNull()?.grams?.toDouble()?.div(1000.0)
         val start = if (s.startWeightGrams > 0) s.startWeightGrams / 1000.0 else weights.firstOrNull()?.grams?.div(1000.0) ?: 0.0
         val goal = if (s.goalWeightGrams > 0) s.goalWeightGrams / 1000.0 else null
+        val todayEntries = journal.filter { it.epochDay == todayEpoch }
+        val water = todayEntries.sumOf { it.waterMl }
+        val protein = todayEntries.sumOf { it.proteinGrams }
+        val symptoms = todayEntries.map { it.symptom }.filter { it.isNotBlank() }
+
+        val lastInj = injections.firstOrNull { !it.skipped && it.medId == s.medId }
+        val lastSite = lastInj?.site ?: ""
+        val allSites = com.dosely.sync.WatchContract.sites
+        val siteIndex = allSites.indexOf(lastSite)
+        val nextSite = if (siteIndex >= 0) allSites[(siteIndex + 1) % allSites.size] else allSites[0]
+
+        val daysUntil = next.date?.let { java.time.temporal.ChronoUnit.DAYS.between(today, it) }
+
         HomeUi(
+            injections = injections,
+            weights = weights,
+            medId = s.medId,
             loaded = true,
             medName = med.brand,
             nextDoseDate = next.date,
@@ -72,25 +100,44 @@ class HomeViewModel(
             useImperial = s.useImperial,
             streak = DoseEngine.streak(today, s.intervalDays, injections),
             adherencePct = (DoseEngine.adherence(today, s.intervalDays, injections) * 100).toInt(),
+            waterMlToday = water,
+            proteinGramsToday = protein,
+            recentSymptoms = symptoms,
+            lastSite = lastSite,
+            nextSuggestedSite = nextSite,
+            daysUntilNextDose = daysUntil,
+            currentDoseMg = lastInj?.doseMg ?: med.doses.firstOrNull() ?: 0.25,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUi())
 
-    fun logDoseNow() {
+    fun addWater(ml: Int = 250) {
+        viewModelScope.launch { repo.addWater(ml) }
+    }
+
+    fun addProtein(grams: Int = 20) {
+        viewModelScope.launch { repo.addProtein(grams) }
+    }
+
+    fun logQuickSymptom(name: String) {
+        viewModelScope.launch { repo.logQuickSymptom(name) }
+    }
+
+    fun logDoseNow(site: String? = null, doseMg: Double? = null) {
         viewModelScope.launch {
             val s = settingsRepo.current()
             val today = LocalDate.now()
-            val injections = repo.injections.first()
-            val suggested = Medications.suggestedDose(
+            val suggested = doseMg ?: Medications.suggestedDose(
                 Medications.byId(s.medId),
                 weeksOnTreatment = weeksSinceFirstDose(s.firstDoseEpochDay, today),
             )
+            val selectedSite = site ?: ui.value.nextSuggestedSite
             repo.logInjection(
                 com.dosely.app.data.db.InjectionEntity(
                     epochDay = today.toEpochDay(),
                     takenAtMillis = System.currentTimeMillis(),
                     medId = s.medId,
                     doseMg = suggested,
-                    site = "Abdomen",
+                    site = selectedSite,
                     notes = "",
                 ),
             )

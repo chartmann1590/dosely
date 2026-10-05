@@ -187,12 +187,12 @@ def main():
         track_body = {
             "track": "internal",
             "releases": [{
-                "name": f"1.0.0 ({version_code})",
+                "name": f"1.1.0 ({version_code})",
                 "versionCodes": [str(version_code)],
                 "status": "completed",
                 "releaseNotes": [{
                     "language": "en-US",
-                    "text": "Initial release of Dosely - GLP-1 & dose tracker with on-device AI coach."
+                    "text": "GLP-1 companion update: Pharmacokinetic decay curves, 6-site injection rotation, daily hydration & protein care, Wear OS companion, and Dosely+ ad-free subscription."
                 }]
             }]
         }

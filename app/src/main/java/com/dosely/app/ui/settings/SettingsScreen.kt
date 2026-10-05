@@ -1,6 +1,8 @@
 package com.dosely.app.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +55,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: (privacy: Boolean) -> Unit = {}) {
     val context = LocalContext.current
+    val subscription by com.dosely.app.billing.SubscriptionManager.get(context).state.collectAsStateWithLifecycle()
     val uiState by viewModel.ui.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var showLanguagePicker by remember { mutableStateOf(false) }
@@ -79,6 +82,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
             Modifier.padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            item { com.dosely.app.billing.SubscriptionCard() }
+            item { com.dosely.app.wear.WatchConnectionCard() }
+            item { com.dosely.app.health.HealthConnectCard() }
             item {
                 SectionCard {
                     SettingsRow(
@@ -94,7 +100,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
                 SectionCard {
                     Text(S("settings_medication"), style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         com.dosely.app.domain.Medications.all.take(3).forEach { med ->
                             Chip(
                                 text = med.brand,
@@ -104,7 +110,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
                         }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         com.dosely.app.domain.Medications.all.drop(3).forEach { med ->
                             Chip(
                                 text = med.brand,
@@ -116,8 +122,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
                     Spacer(Modifier.height(14.dp))
                     Text(S("settings_interval"), style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(7, 14, 28).forEach { d ->
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(1, 7, 14, 28, 30).forEach { d ->
                             Chip(
                                 text = "$d " + S("onb_dose_days"),
                                 selected = settings?.intervalDays == d,
@@ -125,6 +131,12 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
                             )
                         }
                     }
+                    var customInterval by remember(settings?.intervalDays) { mutableStateOf(settings?.intervalDays?.toString().orEmpty()) }
+                    OutlinedTextField(customInterval, { customInterval = it.filter(Char::isDigit).take(3) },
+                        label = { Text("Custom interval (days)") }, singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                    TextButton(enabled = customInterval.toIntOrNull()?.let { it in 1..365 } == true,
+                        onClick = { viewModel.setInterval(customInterval.toInt()) }) { Text("Save interval") }
                     Spacer(Modifier.height(14.dp))
                     Text(S("settings_rem_time"), style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(8.dp))
@@ -364,7 +376,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
             // Cross-promotion: other Hartmann Studios apps, discovered dynamically
             // from the backend. Renders nothing when offline/empty/error.
             item {
-                com.hartmann.crosspromo.ui.HartmannPromoRow(placement = "settings")
+                if (subscription.adFree == false) com.hartmann.crosspromo.ui.HartmannPromoRow(placement = "settings")
             }
 
             item { Spacer(Modifier.height(30.dp)) }
