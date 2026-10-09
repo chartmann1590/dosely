@@ -58,6 +58,8 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::error::KEYSTORE_BASE64 secret is missing"; exit 1
@@ -65,9 +67,14 @@ jobs:
           # The secret may carry line breaks / CRs (base64 -d is strict): strip
           # whitespace, ignore stray characters, then make sure it opens as a keystore.
           printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n\t ' | base64 -d -i > "$RUNNER_TEMP/release.jks"
-          echo "decoded $(stat -c %s "$RUNNER_TEMP/release.jks") bytes"
-          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" > /dev/null 2>&1; then
-            echo "::error::Decoded keystore could not be opened with KEYSTORE_PASSWORD (bad base64 or wrong password)"; exit 1
+          echo "secret chars: ${#KEYSTORE_BASE64}; decoded $(stat -c %s "$RUNNER_TEMP/release.jks") bytes; magic: $(head -c 4 "$RUNNER_TEMP/release.jks" | xxd -p)"
+          echo "strict decode: $(printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > /dev/null 2>&1 && echo ok || echo fails)"
+          echo "store password chars: ${#KEYSTORE_PASSWORD}; key password chars: ${#KEY_PASSWORD}; alias chars: ${#KEY_ALIAS}"
+          open_with() { keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$1" > /dev/null 2>&1 && echo yes || echo no; }
+          echo "opens with KEYSTORE_PASSWORD: $(open_with "$KEYSTORE_PASSWORD"); with KEY_PASSWORD: $(open_with "$KEY_PASSWORD")"
+          echo "keytool error (store pw): $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" 2>&1 | grep -i 'error\|exception' | head -1)"
+          if [ "$(open_with "$KEYSTORE_PASSWORD")" = yes ]; then :; elif [ "$(open_with "$KEY_PASSWORD")" = yes ]; then echo "KEYSTORE_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"; echo "::add-mask::$KEY_PASSWORD"; else
+            echo "::error::Decoded keystore could not be opened with KEYSTORE_PASSWORD or KEY_PASSWORD"; exit 1
           fi
           echo "keystore opens OK"
           echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
