@@ -39,6 +39,11 @@ on:
         required: false
         default: "Bug fixes and improvements."
         type: string
+      dry_run:
+        description: "Build, sign and verify only — do not upload to Play"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -113,6 +118,7 @@ jobs:
           path: app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload to Google Play
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
