@@ -9,6 +9,8 @@ All notable changes to Dosely are documented here.
   green). Google Play rejected 1.1.0 under the Misleading Claims policy ("installed icon
   differs from its store listing") because the installed app still used the old shield icon.
 - Splash logo updated to the same mark; themed (monochrome) icon layer added.
+- Wear OS manifest declares `com.google.android.gms.permission.AD_ID` like the phone app, so
+  Play Console no longer flags the Wear bundle against the Advertising ID declaration.
 
 ### Added
 - `Publish to Google Play` GitHub Actions workflow: builds a signed AAB from repo secrets
