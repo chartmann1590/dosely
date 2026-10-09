@@ -21,7 +21,7 @@ val keystoreKeyPassword = System.getenv("KEY_PASSWORD")
 val hasReleaseKeystore = keystoreFilePath != null && file(keystoreFilePath).exists()
 
 val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 2
-val ciVersionName = System.getenv("VERSION_NAME") ?: "1.1.0"
+val ciVersionName = System.getenv("VERSION_NAME") ?: "1.1.1"
 
 android {
     namespace = "com.dosely.app"

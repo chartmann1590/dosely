@@ -1,0 +1,109 @@
+name: Publish to Google Play
+
+# Builds a signed release AAB (keystore + Play service account from repo secrets)
+# and uploads it to the chosen Play track. Status "draft" stages the release so
+# it can be reviewed and sent for review in Play Console; "completed" rolls out.
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Target track"
+        required: true
+        default: "internal"
+        type: choice
+        options: [internal, alpha, beta, production]
+      status:
+        description: "Release status"
+        required: true
+        default: "draft"
+        type: choice
+        options: [draft, completed, inProgress]
+      version_code:
+        description: "versionCode (must be higher than every code already on Play)"
+        required: true
+        type: string
+      version_name:
+        description: "versionName"
+        required: true
+        default: "1.1.1"
+        type: string
+      release_notes:
+        description: "en-US release notes"
+        required: false
+        default: "Bug fixes and improvements."
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build & upload signed AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 secret is missing"; exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release AAB
+        env:
+          VERSION_CODE: ${{ github.event.inputs.version_code }}
+          VERSION_NAME: ${{ github.event.inputs.version_name }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ADMOB_APPLICATION_ID: ${{ secrets.ADMOB_APPLICATION_ID }}
+          ADMOB_BANNER_UNIT_ID: ${{ secrets.ADMOB_BANNER_UNIT_ID }}
+          ADMOB_INTERSTITIAL_UNIT_ID: ${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}
+          FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
+        run: |
+          echo "Building versionCode=$VERSION_CODE versionName=$VERSION_NAME"
+          ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Verify the AAB is signed with the release key
+        run: |
+          AAB=app/build/outputs/bundle/release/app-release.aab
+          ls -la "$AAB"
+          jarsigner -verify "$AAB" | head -5
+
+      - name: Prepare release notes
+        run: |
+          mkdir -p distribution/whatsnew
+          printf '%s\n' "${{ github.event.inputs.release_notes }}" > distribution/whatsnew/whatsnew-en-US
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dosely-release-aab-${{ github.event.inputs.version_code }}
+          path: app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.charles.dosely
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          track: ${{ github.event.inputs.track }}
+          status: ${{ github.event.inputs.status }}
+          releaseName: ${{ github.event.inputs.version_name }} (${{ github.event.inputs.version_code }})
+          whatsNewDirectory: distribution/whatsnew
+          changesNotSentForReview: true

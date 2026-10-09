@@ -12,7 +12,7 @@ android {
         minSdk = 30
         targetSdk = 36
         versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 2
-        versionName = System.getenv("VERSION_NAME") ?: "1.1.0"
+        versionName = System.getenv("VERSION_NAME") ?: "1.1.1"
     }
     val keyPath = System.getenv("KEYSTORE_FILE") ?: System.getenv("RELEASE_KEYSTORE_PATH")
     if (keyPath != null && file(keyPath).exists()) {

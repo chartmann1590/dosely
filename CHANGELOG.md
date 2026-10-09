@@ -2,6 +2,18 @@
 
 All notable changes to Dosely are documented here.
 
+## [1.1.1] — 2026-10-09
+
+### Fixed
+- Launcher icon now matches the Play Store listing icon (syringe + drop mark on forest
+  green). Google Play rejected 1.1.0 under the Misleading Claims policy ("installed icon
+  differs from its store listing") because the installed app still used the old shield icon.
+- Splash logo updated to the same mark; themed (monochrome) icon layer added.
+
+### Added
+- `Publish to Google Play` GitHub Actions workflow: builds a signed AAB from repo secrets
+  and uploads it to a chosen track.
+
 ## [Unreleased] — Google Play release preparation
 
 ### Added
