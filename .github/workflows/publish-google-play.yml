@@ -149,7 +149,6 @@ jobs:
           status: ${{ github.event.inputs.status }}
           releaseName: ${{ github.event.inputs.version_name }} (${{ github.event.inputs.version_code }})
           whatsNewDirectory: distribution/whatsnew
-          changesNotSentForReview: true
 
       - name: Upload Wear OS AAB to Google Play
         if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.wear_version_code != '' }}
@@ -162,4 +161,3 @@ jobs:
           status: ${{ github.event.inputs.status }}
           releaseName: ${{ github.event.inputs.version_name }} (${{ github.event.inputs.wear_version_code }})
           whatsNewDirectory: distribution/whatsnew
-          changesNotSentForReview: true
