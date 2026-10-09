@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome (themed) launcher layer: silhouette of the syringe + drop mark. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M41.91,66.09 L60.19,47.81"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="9.56"
+        android:strokeLineCap="butt" />
+    <path
+        android:pathData="M60.19,47.81 L68.06,39.94"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.78"
+        android:strokeLineCap="butt" />
+    <path
+        android:pathData="M65.25,37.12 L70.88,42.75"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.78"
+        android:strokeLineCap="butt" />
+    <path
+        android:pathData="M41.91,66.09 L34.88,73.12"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.53"
+        android:strokeLineCap="butt" />
+    <path
+        android:pathData="M32.62,73.97 a1.97,1.97 0 1,0 3.94,0 a1.97,1.97 0 1,0 -3.94,0 Z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M64.41,68.62 a5.62,5.62 0 1,0 11.24,0 a5.62,5.62 0 1,0 -11.24,0 Z"
+        android:fillColor="#FFFFFF" />
+</vector>
