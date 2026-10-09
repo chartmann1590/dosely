@@ -1,8 +1,14 @@
 name: Publish to Google Play
 
-# Builds a signed release AAB (keystore + Play service account from repo secrets)
-# and uploads it to the chosen Play track. Status "draft" stages the release so
-# it can be reviewed and sent for review in Play Console; "completed" rolls out.
+# Builds a signed release AAB with the keystore and Play service account held in
+# the repo's GitHub secrets (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_PASSWORD,
+# KEY_ALIAS, GOOGLE_PLAY_SERVICE_ACCOUNT_JSON, ADMOB_*), then uploads it to the
+# chosen Play track. Manual trigger only, so nothing publishes by accident.
+#   status "draft"     -> stages the release; review it and send for review in Play Console
+#   status "completed" -> rolls the release out (Play still reviews it first)
+# version_code must be higher than every code already on Play (App bundle explorer);
+# Play refuses a reused code ("Version code N has already been used"), so a
+# re-run with the same number cannot double-upload.
 
 on:
   workflow_dispatch:
@@ -20,7 +26,7 @@ on:
         type: choice
         options: [draft, completed, inProgress]
       version_code:
-        description: "versionCode (must be higher than every code already on Play)"
+        description: "versionCode — higher than every code already on Play (App bundle explorer); a reused code is refused by Play"
         required: true
         type: string
       version_name:
@@ -61,32 +67,21 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::KEYSTORE_BASE64 secret is missing"; exit 1
-          fi
-          # The secret may carry line breaks / CRs (base64 -d is strict): strip
-          # whitespace, ignore stray characters, then make sure it opens as a keystore.
-          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n\t ' | base64 -d -i > "$RUNNER_TEMP/release.jks"
-          echo "decoded $(stat -c %s "$RUNNER_TEMP/release.jks") bytes; magic: $(head -c 4 "$RUNNER_TEMP/release.jks" | xxd -p)"
-          echo "base64 secret: chars ${#KEYSTORE_BASE64}, bytes $(printf '%s' "$KEYSTORE_BASE64" | wc -c), non-base64 bytes: $(printf '%s' "$KEYSTORE_BASE64" | tr -d 'A-Za-z0-9+/=' | wc -c) (hex of those: $(printf '%s' "$KEYSTORE_BASE64" | tr -d 'A-Za-z0-9+/=' | xxd -p | head -c 40))"
-          # Secrets pasted from files can carry invisible characters: try as stored, trimmed, and printable-ASCII only.
-          trim() { printf '%s' "$1" | tr -d '\r\n\t'; }
+          for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
+            if [ -z "${!v}" ]; then echo "::error::$v secret is missing"; exit 1; fi
+          done
+          # Secrets pasted from files can carry a UTF-8 BOM, CR/LF or other invisible
+          # characters (this repo's did, Oct 2026). Keep only what the values can contain.
           ascii() { printf '%s' "$1" | tr -cd '\40-\176'; }
-          open_with() { keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$1" > /dev/null 2>&1 && echo yes || echo no; }
-          SP_T="$(trim "$KEYSTORE_PASSWORD")"; KP_T="$(trim "$KEY_PASSWORD")"; SP_A="$(ascii "$KEYSTORE_PASSWORD")"; KP_A="$(ascii "$KEY_PASSWORD")"
-          echo "store pw: chars ${#KEYSTORE_PASSWORD}, bytes $(printf '%s' "$KEYSTORE_PASSWORD" | wc -c), printable-ascii bytes ${#SP_A}; key pw: chars ${#KEY_PASSWORD}, bytes $(printf '%s' "$KEY_PASSWORD" | wc -c), printable-ascii bytes ${#KP_A}; same value: $([ "$KEYSTORE_PASSWORD" = "$KEY_PASSWORD" ] && echo yes || echo no)"
-          echo "alias: chars ${#KEY_ALIAS}, bytes $(printf '%s' "$KEY_ALIAS" | wc -c)"
-          echo "opens: store-raw=$(open_with "$KEYSTORE_PASSWORD") store-trim=$(open_with "$SP_T") store-ascii=$(open_with "$SP_A") key-raw=$(open_with "$KEY_PASSWORD") key-trim=$(open_with "$KP_T") key-ascii=$(open_with "$KP_A") empty=$(open_with "")"
-          echo "keytool (java17) error: $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$SP_A" 2>&1 | grep -i 'error\|exception' | head -1)"
-          echo "openssl view of the PKCS12 (structure only): $(openssl pkcs12 -in "$RUNNER_TEMP/release.jks" -info -noout -passin pass:"$SP_A" 2>&1 | grep -v '^$' | head -3 | tr '\n' ' | ')"
-          STORE_PW=""
-          for cand in "$SP_A" "$KP_A" "$SP_T" "$KP_T" "$KEYSTORE_PASSWORD" "$KEY_PASSWORD"; do if [ -n "$cand" ] && [ "$(open_with "$cand")" = yes ]; then STORE_PW="$cand"; break; fi; done
-          if [ -z "$STORE_PW" ]; then echo "::error::Keystore does not open with KEYSTORE_PASSWORD or KEY_PASSWORD (raw, trimmed, or ASCII-only)"; exit 1; fi
-          echo "::add-mask::$STORE_PW"
-          ALIAS_T="$(ascii "$KEY_ALIAS")"; KP_USE="$KP_A"
-          echo "alias present in keystore: $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PW" -alias "$ALIAS_T" > /dev/null 2>&1 && echo yes || echo no)"
-          echo "keystore opens OK"
-          { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=$STORE_PW"; echo "KEY_PASSWORD=$KP_USE"; echo "KEY_ALIAS=$ALIAS_T"; } >> "$GITHUB_ENV"
+          printf '%s' "$KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.jks"
+          STORE_PW="$(ascii "$KEYSTORE_PASSWORD")"; KEY_PW="$(ascii "$KEY_PASSWORD")"; ALIAS="$(ascii "$KEY_ALIAS")"
+          echo "::add-mask::$STORE_PW"; echo "::add-mask::$KEY_PW"
+          echo "keystore: $(stat -c %s "$RUNNER_TEMP/release.jks") bytes"
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PW" -alias "$ALIAS" > /dev/null 2>&1; then
+            echo "::error::The decoded keystore does not open with KEYSTORE_PASSWORD / KEY_ALIAS — check the repo secrets"; exit 1
+          fi
+          echo "keystore opens and alias is present"
+          { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=$STORE_PW"; echo "KEY_PASSWORD=$KEY_PW"; echo "KEY_ALIAS=$ALIAS"; } >> "$GITHUB_ENV"
 
       - name: Build signed release AAB
         env:

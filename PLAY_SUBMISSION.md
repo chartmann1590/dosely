@@ -68,7 +68,11 @@ not a medical device; no diagnosis/treatment recommendations; AI coach is an off
 
 ## 4. Release build (REQUIRED)
 
-Current debug builds are signed with the debug key and use `versionCode` from `app/build.gradle.kts`.
+✓ **CI path (preferred):** Actions → *Publish to Google Play* → Run workflow (manual only). It builds a
+signed AAB from the repo secrets and uploads it to the chosen track (`draft` → send for review in
+Play Console). Pick a `version_code` above the highest one in App bundle explorer.
+
+Local path, if ever needed: debug builds are signed with the debug key and use `versionCode` from `app/build.gradle.kts`.
 
 ☐ Add a `signingConfig` for release (or opt into **Play App Signing** and upload an AAB signed with the upload key):
 ```bash
