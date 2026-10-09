@@ -35,6 +35,18 @@ Regenerate everything: `python store_assets/make_assets.py && python store_asset
 | 0:39–0:44 | Settings | 59 languages. Built-in reminders. |
 | 0:44–0:50 | Outro end card (feature graphic burned in) | Dosely. Track every dose. Every pound. Every week. Download now on Google Play. |
 
+## Publishing (GitHub Actions)
+
+The signed release bundle is built and uploaded by the **Publish to Google Play** workflow
+(`.github/workflows/publish-google-play.yml`, manual trigger: Actions → Publish to Google Play
+→ Run workflow). Inputs: track, status (`draft` stages the release for review in Play Console;
+`completed` rolls it out), `version_code` (must be higher than every code in App bundle
+explorer — Play refuses a reused one), `version_name`, release notes. Signing and the Play
+service account come from the repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+`KEY_PASSWORD`, `KEY_ALIAS`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`; the workflow strips a BOM /
+stray whitespace from pasted secrets. `publish_play_store.py` remains the local tool for
+listings, graphics and the Wear OS bundle.
+
 ## Play Console placement
 
 - **Main store listing → App icon**: `icons/icon_512.png`
