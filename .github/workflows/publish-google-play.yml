@@ -68,20 +68,25 @@ jobs:
           # whitespace, ignore stray characters, then make sure it opens as a keystore.
           printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n\t ' | base64 -d -i > "$RUNNER_TEMP/release.jks"
           echo "decoded $(stat -c %s "$RUNNER_TEMP/release.jks") bytes; magic: $(head -c 4 "$RUNNER_TEMP/release.jks" | xxd -p)"
-          # Secrets pasted from files often carry a trailing newline/CR: try the password as stored, then trimmed.
+          echo "base64 secret: chars ${#KEYSTORE_BASE64}, bytes $(printf '%s' "$KEYSTORE_BASE64" | wc -c), non-base64 bytes: $(printf '%s' "$KEYSTORE_BASE64" | tr -d 'A-Za-z0-9+/=' | wc -c) (hex of those: $(printf '%s' "$KEYSTORE_BASE64" | tr -d 'A-Za-z0-9+/=' | xxd -p | head -c 40))"
+          # Secrets pasted from files can carry invisible characters: try as stored, trimmed, and printable-ASCII only.
           trim() { printf '%s' "$1" | tr -d '\r\n\t'; }
+          ascii() { printf '%s' "$1" | tr -cd '\40-\176'; }
           open_with() { keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$1" > /dev/null 2>&1 && echo yes || echo no; }
-          SP_T="$(trim "$KEYSTORE_PASSWORD")"; KP_T="$(trim "$KEY_PASSWORD")"
-          echo "store pw chars raw/trimmed: ${#KEYSTORE_PASSWORD}/${#SP_T}; key pw chars raw/trimmed: ${#KEY_PASSWORD}/${#KP_T}"
-          echo "opens: store-raw=$(open_with "$KEYSTORE_PASSWORD") store-trim=$(open_with "$SP_T") key-raw=$(open_with "$KEY_PASSWORD") key-trim=$(open_with "$KP_T")"
-          if [ "$(open_with "$SP_T")" = yes ]; then STORE_PW="$SP_T"; elif [ "$(open_with "$KP_T")" = yes ]; then STORE_PW="$KP_T"; else
-            echo "::error::Keystore does not open with KEYSTORE_PASSWORD or KEY_PASSWORD (raw or trimmed) — the stored password does not match this keystore"; exit 1
-          fi
+          SP_T="$(trim "$KEYSTORE_PASSWORD")"; KP_T="$(trim "$KEY_PASSWORD")"; SP_A="$(ascii "$KEYSTORE_PASSWORD")"; KP_A="$(ascii "$KEY_PASSWORD")"
+          echo "store pw: chars ${#KEYSTORE_PASSWORD}, bytes $(printf '%s' "$KEYSTORE_PASSWORD" | wc -c), printable-ascii bytes ${#SP_A}; key pw: chars ${#KEY_PASSWORD}, bytes $(printf '%s' "$KEY_PASSWORD" | wc -c), printable-ascii bytes ${#KP_A}; same value: $([ "$KEYSTORE_PASSWORD" = "$KEY_PASSWORD" ] && echo yes || echo no)"
+          echo "alias: chars ${#KEY_ALIAS}, bytes $(printf '%s' "$KEY_ALIAS" | wc -c)"
+          echo "opens: store-raw=$(open_with "$KEYSTORE_PASSWORD") store-trim=$(open_with "$SP_T") store-ascii=$(open_with "$SP_A") key-raw=$(open_with "$KEY_PASSWORD") key-trim=$(open_with "$KP_T") key-ascii=$(open_with "$KP_A") empty=$(open_with "")"
+          echo "keytool (java17) error: $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$SP_A" 2>&1 | grep -i 'error\|exception' | head -1)"
+          echo "openssl view of the PKCS12 (structure only): $(openssl pkcs12 -in "$RUNNER_TEMP/release.jks" -info -noout -passin pass:"$SP_A" 2>&1 | grep -v '^$' | head -3 | tr '\n' ' | ')"
+          STORE_PW=""
+          for cand in "$SP_A" "$KP_A" "$SP_T" "$KP_T" "$KEYSTORE_PASSWORD" "$KEY_PASSWORD"; do if [ -n "$cand" ] && [ "$(open_with "$cand")" = yes ]; then STORE_PW="$cand"; break; fi; done
+          if [ -z "$STORE_PW" ]; then echo "::error::Keystore does not open with KEYSTORE_PASSWORD or KEY_PASSWORD (raw, trimmed, or ASCII-only)"; exit 1; fi
           echo "::add-mask::$STORE_PW"
-          ALIAS_T="$(trim "$KEY_ALIAS")"
+          ALIAS_T="$(ascii "$KEY_ALIAS")"; KP_USE="$KP_A"
           echo "alias present in keystore: $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PW" -alias "$ALIAS_T" > /dev/null 2>&1 && echo yes || echo no)"
           echo "keystore opens OK"
-          { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=$STORE_PW"; echo "KEY_PASSWORD=$KP_T"; echo "KEY_ALIAS=$ALIAS_T"; } >> "$GITHUB_ENV"
+          { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=$STORE_PW"; echo "KEY_PASSWORD=$KP_USE"; echo "KEY_ALIAS=$ALIAS_T"; } >> "$GITHUB_ENV"
 
       - name: Build signed release AAB
         env:
