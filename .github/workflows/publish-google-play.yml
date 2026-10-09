@@ -57,11 +57,19 @@ jobs:
       - name: Decode release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::error::KEYSTORE_BASE64 secret is missing"; exit 1
           fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          # The secret may carry line breaks / CRs (base64 -d is strict): strip
+          # whitespace, ignore stray characters, then make sure it opens as a keystore.
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n\t ' | base64 -d -i > "$RUNNER_TEMP/release.jks"
+          echo "decoded $(stat -c %s "$RUNNER_TEMP/release.jks") bytes"
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" > /dev/null 2>&1; then
+            echo "::error::Decoded keystore could not be opened with KEYSTORE_PASSWORD (bad base64 or wrong password)"; exit 1
+          fi
+          echo "keystore opens OK"
           echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
       - name: Build signed release AAB
