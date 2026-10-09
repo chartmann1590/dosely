@@ -67,25 +67,26 @@ jobs:
           # The secret may carry line breaks / CRs (base64 -d is strict): strip
           # whitespace, ignore stray characters, then make sure it opens as a keystore.
           printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n\t ' | base64 -d -i > "$RUNNER_TEMP/release.jks"
-          echo "secret chars: ${#KEYSTORE_BASE64}; decoded $(stat -c %s "$RUNNER_TEMP/release.jks") bytes; magic: $(head -c 4 "$RUNNER_TEMP/release.jks" | xxd -p)"
-          echo "strict decode: $(printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n' | base64 -d > /dev/null 2>&1 && echo ok || echo fails)"
-          echo "store password chars: ${#KEYSTORE_PASSWORD}; key password chars: ${#KEY_PASSWORD}; alias chars: ${#KEY_ALIAS}"
+          echo "decoded $(stat -c %s "$RUNNER_TEMP/release.jks") bytes; magic: $(head -c 4 "$RUNNER_TEMP/release.jks" | xxd -p)"
+          # Secrets pasted from files often carry a trailing newline/CR: try the password as stored, then trimmed.
+          trim() { printf '%s' "$1" | tr -d '\r\n\t'; }
           open_with() { keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$1" > /dev/null 2>&1 && echo yes || echo no; }
-          echo "opens with KEYSTORE_PASSWORD: $(open_with "$KEYSTORE_PASSWORD"); with KEY_PASSWORD: $(open_with "$KEY_PASSWORD")"
-          echo "keytool error (store pw): $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" 2>&1 | grep -i 'error\|exception' | head -1)"
-          if [ "$(open_with "$KEYSTORE_PASSWORD")" = yes ]; then :; elif [ "$(open_with "$KEY_PASSWORD")" = yes ]; then echo "KEYSTORE_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"; echo "::add-mask::$KEY_PASSWORD"; else
-            echo "::error::Decoded keystore could not be opened with KEYSTORE_PASSWORD or KEY_PASSWORD"; exit 1
+          SP_T="$(trim "$KEYSTORE_PASSWORD")"; KP_T="$(trim "$KEY_PASSWORD")"
+          echo "store pw chars raw/trimmed: ${#KEYSTORE_PASSWORD}/${#SP_T}; key pw chars raw/trimmed: ${#KEY_PASSWORD}/${#KP_T}"
+          echo "opens: store-raw=$(open_with "$KEYSTORE_PASSWORD") store-trim=$(open_with "$SP_T") key-raw=$(open_with "$KEY_PASSWORD") key-trim=$(open_with "$KP_T")"
+          if [ "$(open_with "$SP_T")" = yes ]; then STORE_PW="$SP_T"; elif [ "$(open_with "$KP_T")" = yes ]; then STORE_PW="$KP_T"; else
+            echo "::error::Keystore does not open with KEYSTORE_PASSWORD or KEY_PASSWORD (raw or trimmed) — the stored password does not match this keystore"; exit 1
           fi
+          echo "::add-mask::$STORE_PW"
+          ALIAS_T="$(trim "$KEY_ALIAS")"
+          echo "alias present in keystore: $(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PW" -alias "$ALIAS_T" > /dev/null 2>&1 && echo yes || echo no)"
           echo "keystore opens OK"
-          echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=$STORE_PW"; echo "KEY_PASSWORD=$KP_T"; echo "KEY_ALIAS=$ALIAS_T"; } >> "$GITHUB_ENV"
 
       - name: Build signed release AAB
         env:
           VERSION_CODE: ${{ github.event.inputs.version_code }}
           VERSION_NAME: ${{ github.event.inputs.version_name }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           ADMOB_APPLICATION_ID: ${{ secrets.ADMOB_APPLICATION_ID }}
           ADMOB_BANNER_UNIT_ID: ${{ secrets.ADMOB_BANNER_UNIT_ID }}
           ADMOB_INTERSTITIAL_UNIT_ID: ${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}
