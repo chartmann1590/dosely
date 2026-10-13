@@ -2,6 +2,13 @@
 
 All notable changes to Dosely are documented here.
 
+## [1.1.2] — 2026-10-13 (Wear OS)
+
+### Fixed
+- Wear OS app background is now pure black, as the Wear App Quality Guidelines (Color)
+  require. Google Play rejected the Wear bundle (versionCode 5) with "Background not black";
+  the watch theme used a very dark green (#05110F) behind the list.
+
 ## [1.1.1] — 2026-10-09
 
 ### Fixed

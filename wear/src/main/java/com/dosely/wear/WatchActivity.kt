@@ -38,7 +38,9 @@ class WatchActivity : ComponentActivity() {
                 primaryVariant = Color(0xFF289A7B),
                 secondary = Color(0xFFFF8A7A),
                 secondaryVariant = Color(0xFFD66052),
-                background = Color(0xFF05110F),
+                // Wear App Quality Guidelines (Color): the app background must be pure black.
+                // Play rejected the Wear bundle (versionCode 5) for the previous dark green here.
+                background = Color.Black,
                 surface = Color(0xFF0F2622),
                 onPrimary = Color(0xFF051B17),
                 onSecondary = Color(0xFF280703),
@@ -116,6 +118,7 @@ private fun WatchHome(
     Scaffold(
         timeText = { TimeText() },
         positionIndicator = { PositionIndicator(listState) },
+        modifier = Modifier.fillMaxSize().background(Color.Black),
     ) {
         ScalingLazyColumn(
             state = listState,
