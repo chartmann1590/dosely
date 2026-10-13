@@ -11,6 +11,9 @@ name: Publish to Google Play
 # (App bundle explorer); Play refuses a reused code ("Version code N has already
 # been used"), so a re-run with the same number cannot double-upload. Leave one
 # blank to skip that bundle.
+# changes_not_sent_for_review: Play flips this rule — with nothing in review the commit must say
+# changesNotSentForReview=true (then send for review in the Console UI); with changes already in
+# review it must be false. Oct 9 2026 needed false; Oct 13 2026 (after a rejection) needed true.
 
 on:
   workflow_dispatch:
@@ -49,6 +52,11 @@ on:
         description: "Build, sign and verify only — do not upload to Play"
         required: false
         default: false
+        type: boolean
+      changes_not_sent_for_review:
+        description: "Commit the Play edit without sending it for review (true when nothing is in review; Play refuses it while changes are already in review). Then send changes for review in Play Console."
+        required: false
+        default: true
         type: boolean
 
 permissions:
@@ -149,6 +157,7 @@ jobs:
           status: ${{ github.event.inputs.status }}
           releaseName: ${{ github.event.inputs.version_name }} (${{ github.event.inputs.version_code }})
           whatsNewDirectory: distribution/whatsnew
+          changesNotSentForReview: ${{ github.event.inputs.changes_not_sent_for_review == 'true' }}
 
       - name: Upload Wear OS AAB to Google Play
         if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.wear_version_code != '' }}
@@ -161,3 +170,4 @@ jobs:
           status: ${{ github.event.inputs.status }}
           releaseName: ${{ github.event.inputs.version_name }} (${{ github.event.inputs.wear_version_code }})
           whatsNewDirectory: distribution/whatsnew
+          changesNotSentForReview: ${{ github.event.inputs.changes_not_sent_for_review == 'true' }}
