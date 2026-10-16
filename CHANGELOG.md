@@ -2,6 +2,15 @@
 
 All notable changes to Dosely are documented here.
 
+## [1.1.3] — 2026-10-16 (Wear OS)
+
+### Fixed
+- Wear OS launcher icon now matches the Play Store listing icon (syringe + drop mark on forest
+  green), as an adaptive icon. Google Play rejected the Wear bundle (versionCode 6) under the
+  Misleading Claims policy ("installed icon differs from its store listing"): the watch app still
+  shipped the old teal cross icon (`ic_watch`), which the 1.1.1 icon fix had only applied to the
+  phone app. The unused `ic_watch` drawable is removed.
+
 ## [1.1.2] — 2026-10-13 (Wear OS)
 
 ### Fixed

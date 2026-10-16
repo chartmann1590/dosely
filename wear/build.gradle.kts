@@ -11,8 +11,8 @@ android {
         applicationId = "com.charles.dosely"
         minSdk = 30
         targetSdk = 36
-        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 2
-        versionName = System.getenv("VERSION_NAME") ?: "1.1.2"
+        versionCode = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 7
+        versionName = System.getenv("VERSION_NAME") ?: "1.1.3"
     }
     val keyPath = System.getenv("KEYSTORE_FILE") ?: System.getenv("RELEASE_KEYSTORE_PATH")
     if (keyPath != null && file(keyPath).exists()) {

@@ -6,7 +6,7 @@
          blocks releases with "a manifest file in one of your active artifacts doesn't include the
          com.google.android.gms.permission.AD_ID permission". The watch app shows no ads. -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
-    <application android:label="Dosely" android:icon="@drawable/ic_watch" android:allowBackup="false" android:theme="@android:style/Theme.DeviceDefault">
+    <application android:label="Dosely" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:theme="@android:style/Theme.DeviceDefault">
         <meta-data android:name="com.google.android.wearable.standalone" android:value="false" />
         <activity android:name=".WatchActivity" android:exported="true">
             <intent-filter>
