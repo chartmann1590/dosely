@@ -18,11 +18,13 @@
 
 ---
 
-## 🚧 Coming soon to Google Play
+## ✅ Available on Google Play
 
-Dosely is in final testing and heading to the Google Play Store **soon**. Watch this repo
-(Watch → Releases) or check the [project website](https://chartmann1590.github.io/dosely/) —
-announcements land there first.
+Dosely is live on the Google Play Store: **[https://play.google.com/store/apps/details?id=com.charles.dosely](https://play.google.com/store/apps/details?id=com.charles.dosely)**
+
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=com.charles.dosely"><img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="80"></a>
+</p>
 
 ## ✨ What is Dosely?
 
