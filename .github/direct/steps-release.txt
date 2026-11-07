@@ -25,9 +25,10 @@ shot 02e-ai
 tap (?i)^skip for now$
 wait 3
 shot 02f-reminders
-tap (?i)^maybe later$
+tapxy 655 897
 wait 3
-tap (?i)^open dosely$
+shot 02g-done
+tapxy 500 880
 wait 4
 taploop (?i)^(allow|ok|while using the app|only this time|not now|no thanks|got it)$
 adclose
