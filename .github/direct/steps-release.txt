@@ -1,16 +1,35 @@
 launch
 wait 15
 shot 01-launch
-taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking|maybe later|open dosely)$
-wait 2
-shot 02-onboarding-stop
-tap (?i)current weight|weight \(
+tap (?i)^get started$
+wait 3
+taploop (?i)^(allow|ok|while using the app|only this time)$
+shot 02-medication
+tapxy 655 897
+wait 3
+shot 02b-dose-schedule
+tapxy 655 897
+wait 3
+shot 02c-weight
+tap (?i)^weight \(
+wait 1
 type 90
 back
-taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking|maybe later|open dosely)$
+wait 2
+tapxy 655 897
 wait 3
-adclose
-taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking|maybe later|open dosely)$
+shot 02d-language
+tapxy 655 897
+wait 3
+shot 02e-ai
+tap (?i)^skip for now$
+wait 3
+shot 02f-reminders
+tap (?i)^maybe later$
+wait 3
+tap (?i)^open dosely$
+wait 4
+taploop (?i)^(allow|ok|while using the app|only this time|not now|no thanks|got it)$
 adclose
 shot 03-home
 tap (?i)^doses$
