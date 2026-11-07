@@ -3,7 +3,8 @@
 set -u
 D="$1"; P="$2"; U=https://hs-apk-drop.charles-h-hartmann1.workers.dev
 [ -z "${DROP_KEY:-}" ] && { echo "no DROP_KEY"; exit 0; }
-cd "$D"; tar czf "/tmp/$P.tgz" .; ls -la "/tmp/$P.tgz"
+[ -d "$D" ] || { echo "no results dir $D (emulator step did not run): nothing to upload"; exit 0; }
+cd "$D" || exit 0; tar czf "/tmp/$P.tgz" .; ls -la "/tmp/$P.tgz"
 split -b 20m -d -a 3 "/tmp/$P.tgz" "/tmp/$P.part."
 n=0; for f in /tmp/$P.part.*; do curl -sf -m 120 -X PUT -H "X-Key: $DROP_KEY" --data-binary @"$f" "$U/c/$P/$n" >/dev/null && echo "up $n"; n=$((n+1)); done
 sha=$(sha256sum "/tmp/$P.tgz" | cut -d' ' -f1)
