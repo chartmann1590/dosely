@@ -101,6 +101,12 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (project.findProperty("store") == "amazon") {
+                // Amazon build: UI text is looked up by name through R.string reflection (translate/AppLocalizer.kt),
+                // which R8 + resource shrinking strip, so screens showed raw keys ("onb_welcome_title"). Keep them.
+                proguardFiles("proguard-amazon.pro")
+                isShrinkResources = false
+            }
             if (hasReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
