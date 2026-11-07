@@ -28,6 +28,8 @@ android {
     val hsBillingDir = if (((project.findProperty("store") as String?) ?: "play") == "direct") "src/hsdirect/java" else "src/hsplay/java"
     sourceSets.getByName("main").java.srcDir(hsBillingDir)
     sourceSets.getByName("main").kotlin.srcDir(hsBillingDir)
+    // Direct builds: keep every string resource (the app looks strings up by name through R.string reflection; see proguard-direct.pro)
+    if (((project.findProperty("store") as String?) ?: "play") == "direct") sourceSets.getByName("main").res.srcDir("src/hsdirect/res")
     namespace = "com.dosely.app"
     compileSdk = 36
 
@@ -105,6 +107,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (((project.findProperty("store") as String?) ?: "play") == "direct") proguardFile("proguard-direct.pro")
             if (hasReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }

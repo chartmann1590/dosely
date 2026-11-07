@@ -1,16 +1,16 @@
 launch
 wait 15
 shot 01-launch
-taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking)$
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking|maybe later|open dosely)$
 wait 2
 shot 02-onboarding-stop
 tap (?i)current weight|weight \(
 type 90
 back
-taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking)$
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking|maybe later|open dosely)$
 wait 3
 adclose
-taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking)$
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking|maybe later|open dosely)$
 adclose
 tap (?i)^settings$
 wait 3

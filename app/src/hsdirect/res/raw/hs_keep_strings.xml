@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Direct builds: strings are read by name at runtime, so the resource shrinker must keep them all. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@string/*" />
