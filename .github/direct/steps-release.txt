@@ -33,17 +33,17 @@ wait 4
 taploop (?i)^(allow|ok|while using the app|only this time|not now|no thanks|got it)$
 adclose
 shot 03-home
-tap (?i)^doses$
+tapxy 300 895
 wait 3
 adclose
 shot 04-doses
-tap (?i)^journal$
+tapxy 500 895
 wait 3
 shot 05-journal
-tap (?i)^weight$
+tapxy 700 895
 wait 3
 shot 06-weight
-tap (?i)^settings$
+tapxy 900 895
 wait 3
 adclose
 shot 07-settings

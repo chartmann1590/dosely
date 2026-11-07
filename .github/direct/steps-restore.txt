@@ -33,7 +33,7 @@ wait 4
 taploop (?i)^(allow|ok|while using the app|only this time|not now|no thanks|got it)$
 adclose
 shot 03-home
-tap (?i)^settings$
+tapxy 900 895
 wait 3
 adclose
 scrollto (?i)^restore purchases$
