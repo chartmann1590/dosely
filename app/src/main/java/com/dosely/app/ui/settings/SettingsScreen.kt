@@ -84,8 +84,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
         ) {
             // Amazon Appstore build: no ad-free subscription (no Google Play Billing).
             if (!(com.dosely.app.BuildConfig.STORE == "amazon")) item { com.dosely.app.billing.SubscriptionCard() }
-            item { com.dosely.app.wear.WatchConnectionCard() }
-            item { com.dosely.app.health.HealthConnectCard() }
+            // Amazon Appstore build: Fire tablets have no Wear OS data layer (Google Play services) and no Health Connect.
+            if (!(com.dosely.app.BuildConfig.STORE == "amazon")) item { com.dosely.app.wear.WatchConnectionCard() }
+            if (!(com.dosely.app.BuildConfig.STORE == "amazon")) item { com.dosely.app.health.HealthConnectCard() }
             item {
                 SectionCard {
                     SettingsRow(

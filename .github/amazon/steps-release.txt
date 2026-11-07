@@ -14,15 +14,16 @@ shot 03-after-onboarding
 taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking|open dosely)$
 adclose
 shot 04-home
-swipeup
+sh input swipe 600 1300 600 450 400
+wait 1
 shot 05-home-scrolled
 tap (?i)^doses$
 wait 3
 adclose
 shot 06-doses
-tap (?i)^coach$
+tap (?i)^journal$
 wait 3
-shot 07-coach
+shot 07-journal
 tap (?i)^weight$
 wait 3
 shot 08-weight
@@ -30,19 +31,26 @@ tap (?i)^settings$
 wait 3
 adclose
 shot 09-settings
-swipeup
+sh input swipe 600 1300 600 450 400
+wait 1
 shot 10-settings-2
-swipeup
-swipeup
+sh input swipe 600 1300 600 450 400
+wait 1
+sh input swipe 600 1300 600 450 400
+wait 1
 shot 11-settings-3
-swipeup
-swipeup
-swipeup
+sh input swipe 600 1300 600 450 400
+wait 1
+sh input swipe 600 1300 600 450 400
+wait 1
+sh input swipe 600 1300 600 450 400
+wait 1
 shot 12-settings-bottom
-scrollto (?i)terms of service|terms
+tap (?i)^terms of service$
 wait 3
 shot 13-terms
-swipeup
+sh input swipe 600 1300 600 450 400
+wait 1
 shot 14-terms-2
 back
 tap (?i)^home$
