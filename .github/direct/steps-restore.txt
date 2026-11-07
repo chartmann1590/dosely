@@ -1,0 +1,33 @@
+launch
+wait 15
+shot 01-launch
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking)$
+wait 2
+shot 02-onboarding-stop
+tap (?i)current weight|weight \(
+type 90
+back
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking)$
+wait 3
+adclose
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|allow notifications|ok|accept|agree|got it|start|not now|no thanks|done|finish|english|consent|let.s go|start tracking)$
+adclose
+tap (?i)^settings$
+wait 3
+adclose
+scrollto (?i)^restore purchases$
+wait 2
+shot 20-paywall
+tap (?i)^restore purchases$
+wait 3
+shot 21-restore-email
+type hartmannstudios@mail.tab.bot
+tap (?i)^continue$
+wait 15
+shot 22-after-restore
+scrollto (?i)active subscription
+shot 23-settings-adfree
+tap (?i)^home$
+wait 3
+shot 24-home-no-ads
+sh logcat -d -s DirectBilling

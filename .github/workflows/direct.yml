@@ -1,0 +1,107 @@
+name: Direct download build (Stripe) + emulator test
+# Direct-download build of this app (GitHub Releases / charleshartmann.com): same code, built with -Pstore=direct
+# (Stripe Checkout instead of Google Play Billing, no Google Play links, no Play review prompt).
+# Branch builds only make a DRAFT release; nothing is uploaded to any store.
+on:
+  push:
+    branches: [direct-stripe]
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: steps file under .github/direct (steps-release.txt or steps-restore.txt)
+        default: steps-release.txt
+permissions:
+  contents: write
+concurrency:
+  group: direct-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  direct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+    - name: Decode release keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
+          if [ -z "${!v}" ]; then echo "::error::$v secret is missing"; exit 1; fi
+        done
+        # Secrets pasted from files can carry a UTF-8 BOM, CR/LF or other invisible
+        # characters (this repo's did, Oct 2026). Keep only what the values can contain.
+        ascii() { printf '%s' "$1" | tr -cd '\40-\176'; }
+        printf '%s' "$KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.jks"
+        STORE_PW="$(ascii "$KEYSTORE_PASSWORD")"; KEY_PW="$(ascii "$KEY_PASSWORD")"; ALIAS="$(ascii "$KEY_ALIAS")"
+        echo "::add-mask::$STORE_PW"; echo "::add-mask::$KEY_PW"
+        echo "keystore: $(stat -c %s "$RUNNER_TEMP/release.jks") bytes"
+        if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PW" -alias "$ALIAS" > /dev/null 2>&1; then
+          echo "::error::The decoded keystore does not open with KEYSTORE_PASSWORD / KEY_ALIAS — check the repo secrets"; exit 1
+        fi
+        echo "keystore opens and alias is present"
+        { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=$STORE_PW"; echo "KEY_PASSWORD=$KEY_PW"; echo "KEY_ALIAS=$ALIAS"; } >> "$GITHUB_ENV"
+    - name: Build direct APK (store=direct)
+      env:
+        ADMOB_APPLICATION_ID: ${{ secrets.ADMOB_APPLICATION_ID }}
+        ADMOB_BANNER_UNIT_ID: ${{ secrets.ADMOB_BANNER_UNIT_ID }}
+        ADMOB_INTERSTITIAL_UNIT_ID: ${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}
+        FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
+      run: |
+        set -o pipefail
+        echo "Building phone versionCode=$VERSION_CODE versionName=$VERSION_NAME"
+        ./gradlew :app:assembleRelease -Pstore=direct --no-daemon 2>&1 | tee -a /tmp/dsk-build.log
+        cd "$GITHUB_WORKSPACE"
+        mkdir -p dsk-apk
+        A=$(find . -path "*/build/outputs/apk/*release*/*.apk" ! -name "*unsigned*" | head -1); [ -z "$A" ] && A=$(find . -path "*/build/outputs/apk/*release*/*.apk" | head -1)
+        cp "$A" dsk-apk/Dosely-direct-release.apk
+        ls -la dsk-apk
+        BT=$ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools | sort -V | tail -1)
+        $BT/apksigner verify --print-certs dsk-apk/Dosely-direct-release.apk | head -3 || true
+        $BT/aapt2 dump badging dsk-apk/Dosely-direct-release.apk | head -3 || true
+        echo "--- Play Store URL strings left in the direct release dex:"; unzip -p dsk-apk/Dosely-direct-release.apk "classes*.dex" | strings | grep -E "play\.google\.com/store|market://" | head || true
+    - name: Ship build log tail to the private drop (on failure)
+      if: failure()
+      env:
+        DROP_KEY: ${{ secrets.DROP_KEY }}
+      run: |
+        tail -c 60000 /tmp/dsk-build.log 2>/dev/null | curl -s -m 60 -X PUT -H "X-Key: $DROP_KEY" --data-binary @- "https://hs-apk-drop.charles-h-hartmann1.workers.dev/c/dsklog_${{ github.event.repository.name }}_r${{ github.run_number }}/0" || true
+    - name: Enable KVM
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+    - name: Emulator test (phone, Google APIs, no Play Store)
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 30
+        profile: pixel_5
+        target: google_apis
+        arch: x86_64
+        ram-size: 3072M
+        disk-size: 4096M
+        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+        disable-animations: true
+        script: STEPS_FILE=${{ github.event.inputs.steps || 'steps-release.txt' }} bash .github/direct/run-tests.sh
+    - name: Upload test results to Tab's private drop
+      if: always()
+      env:
+        DROP_KEY: ${{ secrets.DROP_KEY }}
+      run: |
+        bash .github/direct/direct-upload.sh /tmp/dsk-out dsk_Dosely_r${{ github.run_number }}
+    - name: Draft release with the direct APK (not published)
+      if: success()
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: direct-${{ github.run_number }}
+        name: Direct build ${{ github.run_number }} (${{ github.sha }})
+        draft: true
+        files: dsk-apk/Dosely-direct-release.apk

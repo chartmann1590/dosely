@@ -19,6 +19,7 @@ fun SubscriptionCard() {
     val state by manager.state.collectAsStateWithLifecycle()
     val isAdFree = state.adFree == true
     val displayPrice = state.price ?: "$0.99"
+    val isDirect = com.hartmannstudios.direct.DirectBilling.isDirect // GitHub / charleshartmann.com build: Stripe, no Play
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -75,7 +76,7 @@ fun SubscriptionCard() {
                 FeatureRow("🚫 100% Ad-Free Experience (No banners or sponsor rows)")
                 FeatureRow("📈 Estimated Medication Level pharmacokinetic trends")
                 FeatureRow("⌚ Android Wear OS wrist logging & instant sync")
-                FeatureRow("💚 Complete privacy: on-device data, cancel anytime in Play")
+                FeatureRow(if (isDirect) "💚 Complete privacy: on-device data, cancel anytime" else "💚 Complete privacy: on-device data, cancel anytime in Play")
             }
 
             Spacer(Modifier.height(16.dp))
@@ -90,7 +91,8 @@ fun SubscriptionCard() {
             } else {
                 FilledTonalButton(
                     onClick = {
-                        runCatching {
+                        if (isDirect) (context as? Activity)?.let(manager::manageSubscription)
+                        else runCatching {
                             context.startActivity(Intent(
                                 Intent.ACTION_VIEW,
                                 Uri.parse("https://play.google.com/store/account/subscriptions?sku=${SubscriptionManager.PRODUCT_ID}&package=${context.packageName}"),
@@ -100,7 +102,7 @@ fun SubscriptionCard() {
                     modifier = Modifier.fillMaxWidth(),
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
                 ) {
-                    Text("✨ Active Subscription · Manage in Play")
+                    Text(if (isDirect) "✨ Active Subscription · Manage" else "✨ Active Subscription · Manage in Play")
                 }
             }
 
@@ -119,15 +121,16 @@ fun SubscriptionCard() {
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = manager::refresh) { Text("Restore purchases") }
+                TextButton(onClick = { if (isDirect) (context as? Activity)?.let(manager::restore) else manager.refresh() }) { Text("Restore purchases") }
                 TextButton(onClick = {
-                    runCatching {
+                    if (isDirect) (context as? Activity)?.let(manager::manageSubscription)
+                    else runCatching {
                         context.startActivity(Intent(
                             Intent.ACTION_VIEW,
                             Uri.parse("https://play.google.com/store/account/subscriptions?sku=${SubscriptionManager.PRODUCT_ID}&package=${context.packageName}"),
                         ))
                     }
-                }) { Text("Manage in Play") }
+                }) { Text(if (isDirect) "Manage subscription" else "Manage in Play") }
             }
             Text(
                 state.message,

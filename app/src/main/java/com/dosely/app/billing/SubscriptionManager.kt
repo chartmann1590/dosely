@@ -5,6 +5,7 @@ import android.content.Context
 import com.android.billingclient.api.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.hartmannstudios.direct.DirectBilling
 
 data class SubscriptionState(
     val adFree: Boolean? = null,
@@ -20,13 +21,32 @@ class SubscriptionManager private constructor(context: Context) : PurchasesUpdat
     val state = mutable.asStateFlow()
     private var product: ProductDetails? = null
     private var connecting = false
-    private val client = BillingClient.newBuilder(context.applicationContext)
+    private val client by lazy { BillingClient.newBuilder(context.applicationContext)
         .setListener(this)
         .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
         .enableAutoServiceReconnection()
-        .build()
+        .build() }
+
+    // Direct (GitHub / charleshartmann.com) build: Stripe Checkout through DirectBilling instead of Google Play.
+    init {
+        if (DirectBilling.isDirect) {
+            DirectBilling.init(context.applicationContext, "dosely")
+            DirectBilling.addListener { updateDirect() }
+            updateDirect()
+        }
+    }
+    private fun updateDirect() {
+        val active = DirectBilling.isEntitled(PRODUCT_ID)
+        mutable.value = mutable.value.copy(adFree = active, price = "$0.99", available = true,
+            message = "Monthly subscription, billed by Stripe. Auto-renews; cancel anytime (Manage subscription).")
+        cache.edit().putBoolean("ad_free", active).apply()
+    }
+    /** Direct builds: look up Stripe purchases by email (new phone, reinstall). */
+    fun restore(activity: Activity) { if (DirectBilling.isDirect) DirectBilling.restore(activity) else refresh() }
+    fun manageSubscription(activity: Activity) { if (DirectBilling.isDirect) DirectBilling.manageSubscription(activity) }
 
     @Synchronized fun refresh() {
+        if (DirectBilling.isDirect) { updateDirect(); return }
         if (client.isReady) { query(); return }
         if (connecting) return
         connecting = true
@@ -79,6 +99,7 @@ class SubscriptionManager private constructor(context: Context) : PurchasesUpdat
     }
 
     fun purchase(activity: Activity) {
+        if (DirectBilling.isDirect) { DirectBilling.purchase(activity, PRODUCT_ID); return }
         val details = product
         val offer = monthlyOffer()
         if (details == null || offer == null) {
