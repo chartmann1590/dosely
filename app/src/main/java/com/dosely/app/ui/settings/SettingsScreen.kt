@@ -82,7 +82,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
             Modifier.padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item { com.dosely.app.billing.SubscriptionCard() }
+            // Amazon Appstore build: no ad-free subscription (no Google Play Billing).
+            if (!(com.dosely.app.BuildConfig.STORE == "amazon")) item { com.dosely.app.billing.SubscriptionCard() }
             item { com.dosely.app.wear.WatchConnectionCard() }
             item { com.dosely.app.health.HealthConnectCard() }
             item {
@@ -376,7 +377,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = koinViewModel(), onOpenLegal: 
             // Cross-promotion: other Hartmann Studios apps, discovered dynamically
             // from the backend. Renders nothing when offline/empty/error.
             item {
-                if (subscription.adFree == false) com.hartmann.crosspromo.ui.HartmannPromoRow(placement = "settings")
+                // Amazon Appstore build: the cross-promo row opens Google Play listings, so it is hidden.
+                if (subscription.adFree == false && !(com.dosely.app.BuildConfig.STORE == "amazon")) com.hartmann.crosspromo.ui.HartmannPromoRow(placement = "settings")
             }
 
             item { Spacer(Modifier.height(30.dp)) }

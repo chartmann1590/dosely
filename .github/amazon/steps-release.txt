@@ -1,0 +1,50 @@
+launch
+wait 15
+shot 01-launch
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|ok|accept|agree|got it|start|not now|later|maybe later|no thanks|done|finish|english|consent|let.s go|start tracking)$
+wait 2
+shot 02-onboarding-stop
+tap (?i)current weight|weight \(
+type 90
+back
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|ok|accept|agree|got it|start|not now|later|maybe later|no thanks|done|finish|english|consent|let.s go|start tracking)$
+wait 3
+adclose
+shot 03-after-onboarding
+taploop (?i)^(next|continue|get started|skip|skip for now|allow|ok|accept|agree|got it|start|not now|later|maybe later|no thanks|done|finish|english|consent|let.s go|start tracking)$
+adclose
+shot 04-home
+swipeup
+shot 05-home-scrolled
+tap (?i)^doses$
+wait 3
+adclose
+shot 06-doses
+tap (?i)^journal$
+wait 3
+shot 07-journal
+tap (?i)^weight$
+wait 3
+shot 08-weight
+tap (?i)^settings$
+wait 3
+adclose
+shot 09-settings
+swipeup
+shot 10-settings-2
+swipeup
+swipeup
+shot 11-settings-3
+swipeup
+swipeup
+swipeup
+shot 12-settings-bottom
+scrollto (?i)terms of service|terms
+wait 3
+shot 13-terms
+swipeup
+shot 14-terms-2
+back
+tap (?i)^home$
+wait 2
+shot 15-back-home

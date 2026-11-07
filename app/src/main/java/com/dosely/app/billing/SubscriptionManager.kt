@@ -16,7 +16,12 @@ data class SubscriptionState(
 /** Play is the source of truth; there is no user-editable premium preference. */
 class SubscriptionManager private constructor(context: Context) : PurchasesUpdatedListener {
     private val cache = context.applicationContext.getSharedPreferences("play_entitlement", Context.MODE_PRIVATE)
-    private val mutable = MutableStateFlow(SubscriptionState(adFree = cache.getBoolean("ad_free", false)))
+    // Amazon Appstore build: no Google Play Billing on Fire devices; the app is free + ads (never ad-free).
+    private val amazonStore = com.dosely.app.BuildConfig.STORE == "amazon"
+    private val mutable = MutableStateFlow(
+        if (amazonStore) SubscriptionState(adFree = false, available = false, message = "")
+        else SubscriptionState(adFree = cache.getBoolean("ad_free", false))
+    )
     val state = mutable.asStateFlow()
     private var product: ProductDetails? = null
     private var connecting = false
@@ -27,6 +32,7 @@ class SubscriptionManager private constructor(context: Context) : PurchasesUpdat
         .build()
 
     @Synchronized fun refresh() {
+        if (amazonStore) return
         if (client.isReady) { query(); return }
         if (connecting) return
         connecting = true
@@ -79,6 +85,7 @@ class SubscriptionManager private constructor(context: Context) : PurchasesUpdat
     }
 
     fun purchase(activity: Activity) {
+        if (amazonStore) return
         val details = product
         val offer = monthlyOffer()
         if (details == null || offer == null) {

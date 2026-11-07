@@ -28,6 +28,9 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        // Store this build is for: "play" (default) or "amazon" (./gradlew ... -Pstore=amazon).
+        // Amazon builds drop Google Play links, the Play in-app review prompt and Play purchases.
+        buildConfigField("String", "STORE", "\"${(project.findProperty("store") as String?) ?: "play"}\"")
         applicationId = "com.charles.dosely"
         minSdk = 26
         targetSdk = 36
