@@ -31,8 +31,8 @@ jobs:
     - name: Decode release keystore
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEYSTORE_PASSWORD: [redacted] secrets.KEYSTORE_PASSWORD }}
+        KEY_PASSWORD: [redacted] secrets.KEY_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       run: |
         for v in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_PASSWORD KEY_ALIAS; do
@@ -49,13 +49,19 @@ jobs:
           echo "::error::The decoded keystore does not open with KEYSTORE_PASSWORD / KEY_ALIAS — check the repo secrets"; exit 1
         fi
         echo "keystore opens and alias is present"
-        { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=$STORE_PW"; echo "KEY_PASSWORD=$KEY_PW"; echo "KEY_ALIAS=$ALIAS"; } >> "$GITHUB_ENV"
+        { echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"; echo "KEYSTORE_PASSWORD=[redacted]"; echo "KEY_PASSWORD=[redacted]"; echo "KEY_ALIAS=$ALIAS"; } >> "$GITHUB_ENV"
+    - name: Direct version (above every shipped code)
+      # Play/Amazon codes are yyDDDHHMM dates; a fresh UTC stamp is always above every earlier code, so each direct build is an update.
+      run: |
+        C=$(date -u +%y%j%H%M); N=1.1.2
+        { echo "ANDROID_VERSION_CODE=$C"; echo "ANDROID_VERSION_NAME=$N"; echo "VERSION_CODE=$C"; echo "VERSION_NAME=$N"; } >> "$GITHUB_ENV"
+        echo "::notice title=Direct version::$N ($C)"
     - name: Build direct APK (store=direct)
       env:
         ADMOB_APPLICATION_ID: ${{ secrets.ADMOB_APPLICATION_ID }}
         ADMOB_BANNER_UNIT_ID: ${{ secrets.ADMOB_BANNER_UNIT_ID }}
         ADMOB_INTERSTITIAL_UNIT_ID: ${{ secrets.ADMOB_INTERSTITIAL_UNIT_ID }}
-        FEEDBACK_API_KEY: ${{ secrets.FEEDBACK_API_KEY }}
+        FEEDBACK_API_KEY: [redacted] secrets.FEEDBACK_API_KEY }}
       run: |
         set -o pipefail
         echo "Building phone versionCode=$VERSION_CODE versionName=$VERSION_NAME"
